@@ -51,7 +51,10 @@ ui.layout proc(emit: (TodoAction) -> void): Widget =
     label("Are you sure?"),
     horizontal(
       button("Cancel"),
-      button("Confirm")))
+      button("Confirm")),
+    horizontal(
+      button("aaa"),
+      button("bbb")))
 
 when isMainModule:
   ui.render(

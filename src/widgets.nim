@@ -46,7 +46,7 @@ macro layoutOr*(w, a, b: untyped): untyped =
 
 proc parent*[T: Widget](w: T): Option[T] =
   if not w.parent.isNil:
-    result = some(w.parent.Widget)
+    result = some(w.parent.T)
 
 proc text*(widget: Widget): Option[string] =
   if widget of Text:

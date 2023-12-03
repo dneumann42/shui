@@ -56,19 +56,14 @@ proc size*(theme: Theme, widget: Widget): (float, float) =
   else:
     raise newException(WidgetError, "expected element")
 
-proc position(theme: Theme, widget: Widget, index = 0): (float, float)
-
-proc position(theme: Theme, layout: Layout, index = 0): (float, float) =
-  discard
-
-proc elemPosition(theme: Theme, elem: Widget, index = 0): (float, float) =
-  case elem.parent
+proc position(theme: Theme, widget: Widget, index = 0): (float, float) =
+  case widget.parent
   of None():
     result = (0.0, 0.0)
   of Some(@p):
     var layout: Layout = p.Layout
     let
-      size = theme.size(elem)
+      size = theme.size(widget)
       parentPos = theme.position(p)
     result = parentPos + layout.cursor
     if layout of Vertical:
@@ -78,10 +73,6 @@ proc elemPosition(theme: Theme, elem: Widget, index = 0): (float, float) =
     else:
       raise newException(LayoutError, "expected layout")
 
-proc position(theme: Theme, widget: Widget, index = 0): (float, float) =
-  layoutOr(widget, theme.position(widget.Layout, index), theme.elemPosition(
-      widget, index))
-
 proc update*[T, A](ui: UI[T, A], blk: proc(action: A): Option[T]) =
   for action in ui.actions:
     if Some(@newT) ?= blk(action):
@@ -90,6 +81,7 @@ proc update*[T, A](ui: UI[T, A], blk: proc(action: A): Option[T]) =
 proc render(theme: Theme, layout: Layout, index: int) =
   for i, child in layout.children:
     theme.render(child, index = i)
+  layout.cursor = (0.0, 0.0)
 
 proc renderElem(theme: Theme, elem: Widget, index: int) =
   var (w, h) = theme.size(elem)
