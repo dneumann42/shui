@@ -1,4 +1,5 @@
-import options, fusion/matching, sugar, widgets, shui, theme, terminal
+import options, fusion/matching, sugar, terminal
+import shui/[widgets, shui, theme]
 {.experimental: "caseStmtMacros".}
 
 type
@@ -36,28 +37,27 @@ proc tuiTheme(): Theme =
       verticalSpacing: 0.0
     ),
     windowSize: proc(): auto = (terminalWidth().float, terminalHeight().float),
-    drawButton: proc(x, y, w, h: float, button: Button) = tuiDrawButton(x.int,
-        y.int, w.int, h.int, button.text),
-    drawLabel: proc(x, y, w, _: float, label: Label) = tuiDrawLabel(x.int,
-        y.int, w.int, label.text))
-
-var ui = initUI[State, TodoAction](tuiTheme(), () => State(todos: @[]))
-
-ui.update (action: TodoAction) =>
-  none(State)
-
-ui.layout proc(emit: (TodoAction) -> void): Widget =
-  vertical(
-    label("Are you sure?"),
-    horizontal(
-      button("Cancel"),
-      button("Confirm")),
-    horizontal(
-      button("aaa"),
-      button("bbb")))
+    updateButton: proc(button: var Button) =
+      discard,
+    drawButton: proc(button: Button) =
+      let (x, y, w, h) = button.toTuple
+      tuiDrawButton(x.int, y.int, w.int, h.int, button.text),
+    drawLabel: proc(label: Label) =
+      let (x, y, w, _) = label.toTuple
+      tuiDrawLabel(x.int, y.int, w.int, label.text))
 
 when isMainModule:
-  ui.render(
-    preRender = proc() =
-    eraseScreen()
-    setCursorPos(1, 1))
+  var ui = initUI[State, TodoAction](tuiTheme(), () => State(todos: @[]))
+
+  ui.update (action: TodoAction) =>
+    none(State)
+
+  ui.layout proc(emit: (TodoAction) -> void): Widget =
+    vertical(
+      label("Are you sure?"),
+      button("HERER?") do(): discard,
+      horizontal(
+        button("Cancel") do(): discard,
+        button("Confirm") do(): discard),
+      button("aaa") do(): discard,
+      button("bbb") do(): discard)
