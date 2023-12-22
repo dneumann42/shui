@@ -1,4 +1,5 @@
-import options, macros, fusion/matching, sequtils, sugar
+import options, macros, fusion/matching, sequtils, sugar, typetraits, typeinfo
+import std/enumerate
 
 type
   WidgetState* = enum
@@ -29,13 +30,12 @@ type
   Layout* = ref object of Widget
     nodes*: seq[Widget]
 
-  Panel* = ref object of Layout
-    fixedSize* = none((float, float))
-
   Dialog* = ref object of Widget
-    open*: bool
     id*: string
     layout*: Layout
+
+  Panel* = ref object of Layout
+    fixedSize* = none((float, float))
 
   Horizontal* = ref object of Layout
   Vertical* = ref object of Layout
@@ -64,6 +64,27 @@ proc h*(w: Widget): auto = w.size[1]
 
 converter toTuple*(w: Widget): (float, float, float, float) =
   (w.x, w.y, w.w, w.h)
+
+proc name*(widget: Widget): string =
+  if widget of Horizontal: "Horizontal"
+  elif widget of Vertical: "Vertical"
+  elif widget of Panel: "Panel"
+  elif widget of Button: "Button"
+  elif widget of Label: "Label"
+  elif widget of Dialog: "Dialog"
+  else: "Widget"
+
+proc `$`*(widget: Widget): string =
+  result = name(widget)
+  if widget of Layout:
+    result &= "("
+    for i, node in enumerate(widget.Layout.nodes):
+      result &= $node & (if i < widget.Layout.nodes.len - 1: ", " else: "")
+    result &= ")"
+  elif widget of Dialog:
+    result = "("
+    result &= " " & $widget.Dialog.layout
+    result &= ")"
 
 proc `+`*(a, b: (float, float)): (float, float) =
   (a[0] + b[0], a[1] + b[1])
@@ -97,6 +118,8 @@ proc text*(widget: Widget): Option[string] =
 
 proc add*(l: Layout, nodes: varargs[Widget]) =
   for node in nodes:
+    if node.isNil:
+      continue
     node.base = l
     l.nodes.add(node)
 
@@ -141,9 +164,3 @@ proc vertical*(nodes: varargs[Widget]): Layout =
 proc horizontal*(nodes: varargs[Widget]): Layout =
   result = Horizontal(nodes: @[])
   result.add(nodes)
-
-proc dialog*(id: string, open = false): Dialog =
-  result = Dialog(
-    open: open,
-    id: id,
-    layout: vertical())

@@ -1,4 +1,4 @@
-import options, fusion/matching, sugar, widgets, theme, print, macros
+import options, fusion/matching, sugar, widgets, theme, print, macros, sets, tables
 {.experimental: "caseStmtMacros".}
 
 type
@@ -6,6 +6,8 @@ type
     root: Widget
     theme: Theme
     shouldRerender = true
+    openDialogs: HashSet[string]
+    dialogSizes: Table[string, (float, float)]
     when T isnot void:
       state: T
     when A isnot void:
@@ -21,11 +23,15 @@ type
 method render(w: Widget, theme: Theme): void {.base.} = 
   discard
 
-method measureLayout(l: Layout, cursor: var float, theme: Theme): (float, float) {.base.} =
-  discard
+method measureLayout(l: Layout, theme: Theme): (float, float) {.base.} =
+  raise newException(CatchableError, "")
 
 proc initUI*[T, A](theme: Theme, blk: proc(): T): UI[T, A] =
-  result = UI[T, A](state: blk(), theme: theme)
+  result = UI[T, A](
+    state: blk(), 
+    theme: theme, 
+    openDialogs: initHashSet[string](), 
+    dialogSizes: initTable[string, (float, float)]())
 
 proc initUI*[A](theme: Theme, blk: proc(): void): StatelessUI[A] =
   result = StatelessUI[A](theme: theme)
@@ -40,6 +46,9 @@ proc initStaticUI*(theme: Theme, blk: proc(): void): StaticUI =
 proc emit*[T, A](ui: UI[T, A], action: A) =
   ui.actions.add(action)
 
+proc mgetState*[T, A](ui: UI[T, A]): T =
+  ui.state
+
 proc measureSize*(theme: Theme, widget: Widget): (float, float)
 
 proc maxSize*(theme: Theme, layout: Layout): (float, float) =
@@ -47,32 +56,34 @@ proc maxSize*(theme: Theme, layout: Layout): (float, float) =
     var (w, h) = theme.measureSize(child)
     result = (max(result[0], w), max(result[1], h))
 
-method measureLayout(layout: Horizontal, cursor: var float, theme: Theme): (float, float) =
+method measureLayout(layout: Horizontal, theme: Theme): (float, float) =
+  var cursor = 0.0
   let (_, my) = theme.maxSize(layout)
   for y in layout.nodes:
     cursor += theme.measureSize(y)[1] ## handle margin + padding
   (cursor, my)
 
-method measureLayout(layout: Vertical, cursor: var float, theme: Theme): (float, float) =
+method measureLayout(layout: Vertical, theme: Theme): (float, float) =
+  var cursor = 0.0
   let (mx, _) = theme.maxSize(layout)
   for x in layout.nodes:
     cursor += theme.measureSize(x)[0] ## handle margin + padding
   (mx, cursor)
 
-method measureLayout(layout: Panel, cursor: var float, theme: Theme): (float, float) =
+method measureLayout(layout: Panel, theme: Theme): (float, float) =
+  var cursor = 0.0
   let (mx, _) = theme.maxSize(layout)
   for x in layout.nodes:
     cursor += theme.measureSize(x)[0] ## handle margin + padding
   layout.fixedSize.get((mx, cursor))
 
 proc measureSize*(theme: Theme, widget: Widget): (float, float) =
-  var cursor = 0.0
   if widget of Layout:
-    measureLayout(widget.Layout, cursor, theme)
+    measureLayout(widget.Layout, theme)
   elif widget of Element:
     theme.measureElement(widget.Element)
   elif widget of Dialog:
-    measureLayout(widget.Dialog.layout, cursor, theme)
+    theme.measureSize(widget.Dialog.layout)
   else:
     raise WidgetError.newException("expected element")
 
@@ -85,6 +96,7 @@ proc parentBounds(theme: Theme, widget: var Widget): auto =
 
 proc updateWidget*(theme: Theme, widget: var Widget, cursor: var (float, float),
     inDialog = false)
+
 proc updateLayout*(theme: Theme, layout: var Layout, inDialog = false)
 
 proc updateDialogAux*(theme: Theme, dialog: var Dialog) =
@@ -139,36 +151,41 @@ proc updateWidget*(theme: Theme, widget: var Widget) =
   var cursor = (0.0, 0.0)
   theme.updateWidget(widget, cursor)
 
-proc update*[T, A](ui: UI[T, A], blk: proc(action: A, state: T): Option[T]) =
-  ui.theme.updateWidget(ui.root)
-  for action in ui.actions:
-    if Some(@newT) ?= blk(action, ui.state):
-      ui.state = newT
-  ui.actions.setLen(0)
+template withState*[T, A](ui: UI[T, A], blk: untyped) =
+  when T isnot void:
+    block:
+      var state {.inject.} = ui.state
+      blk
+      ui.state = state
 
-template handle*[A](ui: StatelessUI[A], blk: untyped) =
-  ui.theme.updateWidget(ui.root)
-  for action in ui.actions:
-    blk(action)
-  ui.actions.setLen(0)
+macro update*[T, A](ui: UI[T, A], id: untyped, blk: untyped) =
+  quote do:
+    `ui`.theme.updateWidget(`ui`.root)
+    for act in `ui`.actions:
+      let `id` {.inject.} = act
+      let maybeState = `blk`
+      if maybeState.isSome:
+        `ui`.state = maybeState.get()
+    `ui`.actions.setLen(0)
 
-template handle*[A, O](ui: StatelessUI[A], state: var O, blk: untyped) =
-  ui.theme.updateWidget(ui.root)
-  for action in ui.actions:
-    blk(action, state)
-  ui.actions.setLen(0)
+macro handle*[T, A](ui: UI[T, A], id: untyped, blk: untyped) =
+  quote do:
+    `ui`.theme.updateWidget(`ui`.root)
+    for act in `ui`.actions:
+      let `id` {.inject.} = act
+      `blk`
+    `ui`.actions.setLen(0)
 
 proc isOpen*[T, A](ui: UI[T, A], dialogId: string): bool =
-  if Some(@dialog) ?= ui.root.getDialogById(dialogId):
-    return dialog.open
+  result = ui.openDialogs.contains(dialogId)
 
 proc open*[T, A](ui: UI[T, A], dialogId: string) =
-  if Some(@dialog) ?= ui.root.getDialogById(dialogId):
-    dialog.open = true
+  ui.openDialogs.incl(dialogId)
+  ui.shouldRerender = true
 
 proc close*[T, A](ui: UI[T, A], dialogId: string) =
-  if Some(@dialog) ?= ui.root.getDialogById(dialogId):
-    dialog.open = false
+  ui.openDialogs.excl(dialogId)
+  ui.shouldRerender = true
 
 proc toggleOpen*[T, A](ui: UI[T, A], dialogId: string) =
   if ui.isOpen(dialogId):
@@ -176,13 +193,16 @@ proc toggleOpen*[T, A](ui: UI[T, A], dialogId: string) =
   else:
     ui.open(dialogId)
 
+proc dialogSize*[T, A](ui: UI[T, A], dialogId: string): (float, float) =
+  if not ui.dialogSizes.hasKey(dialogId):
+    return (0.0, 0.0)
+  ui.dialogSizes[dialogId]
+
 method render(layout: Layout, theme: Theme) =
   for i, node in layout.nodes:
     render(node, theme)
 
 method render(dialog: Dialog, theme: Theme) =
-  if not dialog.open:
-    return
   theme.drawDialog(dialog)
   render(dialog.layout, theme)
 
@@ -202,18 +222,9 @@ proc render[T, A](ui: UI[T, A]) =
   if not ui.root.isNil:
     render(ui.root, ui.theme)
 
-proc layout*[T, A](ui: UI[T, A], blk: proc(emit: proc(
-    action: A): void): Widget) =
-  if ui.shouldRerender:
-    ui.root = blk((action: A) => ui.actions.add(action))
-    ui.shouldRerender = false
-  ui.render()
-
-proc layout*(staticUI: StaticUI, blk: proc(): Widget) =
-  if staticUI.shouldRerender:
-    staticUI.root = blk()
-    staticUI.shouldRerender = false
-  staticUI.render()
+macro panel*(fixedSize: (float, float), blk: untyped): auto =
+  quote do:
+    Panel(nodes: @[`blk`.Widget], fixedSize: `fixedSize`.some)
 
 macro layout*[T, A](ui: UI[T, A], blk: untyped): auto =
   quote do:
@@ -222,3 +233,11 @@ macro layout*[T, A](ui: UI[T, A], blk: untyped): auto =
         `blk`
       `ui`.shouldRerender = false
     `ui`.render()
+
+macro dialog*[T, A](ui: UI[T, A], id: string, blk: untyped): auto =
+  quote do:
+    if `ui`.isOpen(`id`):
+      let node = `blk`
+      Dialog(id: `id`, layout: node)
+    else:
+      nil
