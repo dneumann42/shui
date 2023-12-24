@@ -20,7 +20,7 @@ type
   WidgetError = object of ValueError
   NotElem = object of ValueError
 
-method render(w: Widget, theme: Theme): void {.base.} = 
+method render(w: Widget, theme: Theme): void {.base.} =
   discard
 
 method measureLayout(l: Layout, theme: Theme): (float, float) {.base.} =
@@ -28,9 +28,9 @@ method measureLayout(l: Layout, theme: Theme): (float, float) {.base.} =
 
 proc initUI*[T, A](theme: Theme, blk: proc(): T): UI[T, A] =
   result = UI[T, A](
-    state: blk(), 
-    theme: theme, 
-    openDialogs: initHashSet[string](), 
+    state: blk(),
+    theme: theme,
+    openDialogs: initHashSet[string](),
     dialogSizes: initTable[string, (float, float)]())
 
 proc initUI*[A](theme: Theme, blk: proc(): void): StatelessUI[A] =
@@ -239,5 +239,13 @@ macro dialog*[T, A](ui: UI[T, A], id: string, blk: untyped): auto =
     if `ui`.isOpen(`id`):
       let node = `blk`
       Dialog(id: `id`, layout: node)
+    else:
+      nil
+
+macro customDialog*[T, A](ui: UI[T, A], id: string, blk: untyped): auto =
+  quote do:
+    if `ui`.isOpen(`id`):
+      let node = `blk`
+      Dialog(id: `id`, layout: node, noBackdrop: true)
     else:
       nil

@@ -33,6 +33,7 @@ type
   Dialog* = ref object of Widget
     id*: string
     layout*: Layout
+    noBackdrop* = false
 
   Panel* = ref object of Layout
     fixedSize* = none((float, float))
