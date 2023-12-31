@@ -1,4 +1,5 @@
 import options, fusion/matching, sugar, widgets, theme, print, macros, sets, tables
+import std/macrocache, strutils
 {.experimental: "caseStmtMacros".}
 
 type
@@ -8,6 +9,7 @@ type
     shouldRerender = true
     openDialogs: HashSet[string]
     dialogSizes: Table[string, (float, float)]
+    buttons: Table[string, Button]
     when T isnot void:
       state: T
     when A isnot void:
@@ -19,6 +21,10 @@ type
   LayoutError = object of ValueError
   WidgetError = object of ValueError
   NotElem = object of ValueError
+
+const buttonChecks = CacheTable"buttonChecks"
+
+var layoutId {.compileTime.} = ""
 
 method render(w: Widget, theme: Theme): void {.base.} =
   discard
@@ -43,7 +49,7 @@ proc initUI*[A](theme: Theme): StatelessUI[A] =
 proc initStaticUI*(theme: Theme, blk: proc(): void): StaticUI =
   result = StaticUI(theme: theme)
 
-proc emit*[T, A](ui: UI[T, A], action: A) =
+proc emit*[T, A](ui: UI[T, A], action: sink A) =
   ui.actions.add(action)
 
 proc mgetState*[T, A](ui: UI[T, A]): T =
@@ -132,9 +138,7 @@ proc updateWidget*(theme: Theme, widget: var Widget, cursor: var (float, float),
 
     # if (not inDialog and not dialogOpen) or (inDialog and dialogOpen):
     theme.updateButton(widget.Button)
-
-    if widget.lastState == active and widget.state != active:
-      widget.Button.callback()
+    widget.Button.clicked = widget.lastState == active and widget.state != active
 
   if not base.isNil:
     if base of Horizontal:
@@ -222,17 +226,45 @@ proc render[T, A](ui: UI[T, A]) =
   if not ui.root.isNil:
     render(ui.root, ui.theme)
 
+macro button*[T, A](u: UI[T, A], label: string, blk: untyped): auto =
+  let id = label
+  echo layoutId
+  buttonChecks[layoutId & "|" & $id] = quote do: `blk`
+
+  quote do:
+    block:
+      `u`.buttons.mgetOrPut(`id`, initButton(`label`, `id`))
+
 macro panel*(fixedSize: (float, float), blk: untyped): auto =
   quote do:
     Panel(nodes: @[`blk`.Widget], fixedSize: `fixedSize`.some)
 
-macro layout*[T, A](ui: UI[T, A], blk: untyped): auto =
+macro layoutButtons*[T, A](ui: UI[T, A]): untyped =
+  var items = nnkStmtList.newTree()
+  for rawId, check in buttonChecks.pairs:
+    if rawId.startsWith(layoutId & "|"):
+      let buttonId = (rawId.split {'|'})[1]
+      items.add(
+        quote do:
+        if `ui`.buttons.hasKey(`buttonId`) and `ui`.buttons[`buttonId`].clicked:
+          (`check`)
+      )
+  quote do:
+    `items`
+
+macro layoutAux*[T, A](ui: UI[T, A], blk: untyped): untyped =
   quote do:
     if `ui`.shouldRerender:
       `ui`.root = block:
         `blk`
       `ui`.shouldRerender = false
     `ui`.render()
+
+macro layout*(ui: untyped, id: string, blk: untyped) =
+  layoutId = $id
+  quote do:
+    layoutAux(`ui`, `blk`)
+    layoutButtons(`ui`)
 
 macro dialog*[T, A](ui: UI[T, A], id: string, blk: untyped): auto =
   quote do:

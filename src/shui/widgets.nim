@@ -11,7 +11,7 @@ type
     left
     center
     right
-  
+
   VAlign* = enum
     top
     center
@@ -47,7 +47,8 @@ type
     text*: string
 
   Button* = ref object of Text
-    callback*: proc(): void
+    id*: string
+    clicked*: bool
 
   Label* = ref object of Text
 
@@ -151,8 +152,8 @@ proc getDialogs*(root: Widget): seq[Dialog] =
 proc label*(text = ""): Label =
   result = Label(text: text)
 
-proc button*(text = "", clicked: () -> void): Button =
-  result = Button(text: text, callback: clicked)
+proc initButton*(text = "", id: string): Button =
+  result = Button(text: text, id: id)
 
 template panel*(blk: untyped): Panel =
   let (w, h) = blk()
