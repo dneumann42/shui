@@ -32,7 +32,7 @@ type
 
   Dialog* = ref object of Widget
     id*: string
-    layout*: Layout
+    layout* {.cursor.}: Layout
     noBackdrop* = false
 
   Panel* = ref object of Layout

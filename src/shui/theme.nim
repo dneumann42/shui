@@ -12,8 +12,7 @@ type
     measureElement*: proc(w: Element): (float, float)
     windowSize*: proc(): (float, float)
 
-    updateButton*: proc(button: var Button): void
-    updateDialog*: proc(dialog: var Dialog): void
+    updateButton*: proc(button: Button): void
 
     drawDialog*: proc(dialog: Dialog): void
     drawButton*: proc(button: Button): void
@@ -24,8 +23,7 @@ proc initTheme*(): Theme =
     measureElement: proc(w: Element): auto = (0.0, 0.0),
     windowSize: proc(): (float, float) = (0.0, 0.0),
 
-    updateButton: proc(_: var Button) = discard,
-    updateDialog: proc(_: var Dialog) = discard,
+    updateButton: proc(_: Button) = discard,
 
     drawDialog: proc(_: Dialog) = discard,
     drawButton: proc(_: Button) = discard,

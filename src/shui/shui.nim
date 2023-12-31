@@ -52,7 +52,7 @@ proc initStaticUI*(theme: Theme, blk: proc(): void): StaticUI =
 proc emit*[T, A](ui: UI[T, A], action: sink A) =
   ui.actions.add(action)
 
-proc mgetState*[T, A](ui: UI[T, A]): T =
+proc mgetState*[T, A](ui: UI[T, A]): lent T =
   ui.state
 
 proc measureSize*(theme: Theme, widget: Widget): (float, float)
@@ -93,35 +93,36 @@ proc measureSize*(theme: Theme, widget: Widget): (float, float) =
   else:
     raise WidgetError.newException("expected element")
 
-proc parentBounds(theme: Theme, widget: var Widget): auto =
+proc parentBounds(theme: Theme, widget: Widget): auto =
   if Some(@base) ?= widget.base:
     (base, base.toTuple)
   else:
     let (w, h) = theme.windowSize()
     (nil, (0.0, 0.0, w, h))
 
-proc updateWidget*(theme: Theme, widget: var Widget, cursor: var (float, float),
+proc updateWidget*(theme: Theme, widget: Widget, cursor: var (float, float),
     inDialog = false)
 
-proc updateLayout*(theme: Theme, layout: var Layout, inDialog = false)
+proc updateLayout*(theme: Theme, layout: Layout, inDialog = false)
 
-proc updateDialogAux*(theme: Theme, dialog: var Dialog) =
-  dialog.size = theme.measureSize(dialog)
-  dialog.pos = (0.0, 0.0)
-  theme.updateDialog(dialog)
-  theme.updateLayout(dialog.layout, inDialog = true)
+proc updateDialogAux*(theme: Theme, dialog: Dialog) =
+  # if not dialog.layout.isNil:
+  #   dialog.size = theme.measureSize(dialog)
+  #   dialog.pos = (0.0, 0.0)
+  #   theme.updateLayout(dialog.layout, inDialog = true)
+  discard
 
-proc updateLayout*(theme: Theme, layout: var Layout, inDialog = false) =
+proc updateLayout*(theme: Theme, layout: Layout, inDialog = false) =
   var cursor = (0.0, 0.0)
   for node in layout.nodes.mitems:
     theme.updateWidget(node, cursor, inDialog = inDialog)
 
-proc updateWidget*(theme: Theme, widget: var Widget, cursor: var (float, float),
+proc updateWidget*(theme: Theme, widget: Widget, cursor: var (float, float),
     inDialog = false) =
   if widget.isNil:
     return
 
-  if widget of Dialog:
+  if widget of Dialog and not widget.isNil:
     theme.updateDialogAux(widget.Dialog)
     return
 
@@ -151,7 +152,7 @@ proc updateWidget*(theme: Theme, widget: var Widget, cursor: var (float, float),
     else:
       raise LayoutError.newException("Unexpected layout of parent")
 
-proc updateWidget*(theme: Theme, widget: var Widget) =
+proc updateWidget*(theme: Theme, widget: Widget) =
   var cursor = (0.0, 0.0)
   theme.updateWidget(widget, cursor)
 
@@ -170,6 +171,8 @@ macro update*[T, A](ui: UI[T, A], id: untyped, blk: untyped) =
       let maybeState = `blk`
       if maybeState.isSome:
         `ui`.state = maybeState.get()
+    if `ui`.actions.len > 0:
+      `ui`.shouldRerender = true
     `ui`.actions.setLen(0)
 
 macro handle*[T, A](ui: UI[T, A], id: untyped, blk: untyped) =
@@ -178,6 +181,8 @@ macro handle*[T, A](ui: UI[T, A], id: untyped, blk: untyped) =
     for act in `ui`.actions:
       let `id` {.inject.} = act
       `blk`
+    if `ui`.actions.len > 0:
+      `ui`.shouldRerender = true
     `ui`.actions.setLen(0)
 
 proc isOpen*[T, A](ui: UI[T, A], dialogId: string): bool =
@@ -226,14 +231,28 @@ proc render[T, A](ui: UI[T, A]) =
   if not ui.root.isNil:
     render(ui.root, ui.theme)
 
-macro button*[T, A](u: UI[T, A], label: string, blk: untyped): auto =
-  let id = label
-  echo layoutId
-  buttonChecks[layoutId & "|" & $id] = quote do: `blk`
+proc registerButton*[T, A](u: UI[T, A], newBtn: Button): Button =
+  if u.buttons.hasKey(newBtn.id):
+    var old = u.buttons[newBtn.id]
+    if old.text != newBtn.text:
+      u.buttons[newBtn.id] = newBtn
+  u.buttons.mgetOrPut(newBtn.id, newBtn)
 
+macro buttonAux*[T, A](u: UI[T, A], id, label: string, blk: untyped): auto =
+  buttonChecks[layoutId & "|" & $id] = quote do: `blk`
   quote do:
-    block:
-      `u`.buttons.mgetOrPut(`id`, initButton(`label`, `id`))
+    block: registerButton(`u`, initButton(`label`, `id`))
+
+macro buttonAux*[T, A](u: UI[T, A], label: string, blk: untyped): auto =
+  let id = $label
+  buttonChecks[layoutId & "|" & id] = quote do: `blk`
+  quote do:
+    block: registerButton(`u`, initButton(`label`, `id`))
+
+template button*[T, A](u: UI[T, A], label: string, blk: untyped): auto =
+  buttonAux(u, label, blk)
+template button*[T, A](u: UI[T, A], id, label: string, blk: untyped): auto =
+  buttonAux(u, id, label, blk)
 
 macro panel*(fixedSize: (float, float), blk: untyped): auto =
   quote do:
