@@ -117,6 +117,10 @@ proc updateLayout*(theme: Theme, layout: Layout, inDialog = false) =
   for node in layout.nodes.mitems:
     theme.updateWidget(node, cursor, inDialog = inDialog)
 
+# TODO(Dustin):
+# To fix flickering, I call update widget after the redraw
+# since this is done in the draw step, I should create a new
+# update widget function that avoids the call to update from the theme
 proc updateWidget*(theme: Theme, widget: Widget, cursor: var (float, float),
     inDialog = false) =
   if widget.isNil:
@@ -277,6 +281,7 @@ macro layoutAux*[T, A](ui: UI[T, A], blk: untyped): untyped =
       `ui`.root = block:
         `blk`
       `ui`.shouldRerender = false
+      `ui`.theme.updateWidget(`ui`.root)
     `ui`.render()
 
 macro layout*(ui: untyped, id: string, blk: untyped) =
