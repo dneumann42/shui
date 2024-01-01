@@ -242,19 +242,22 @@ proc registerButton*[T, A](u: UI[T, A], newBtn: Button): Button =
       u.buttons[newBtn.id] = newBtn
   u.buttons.mgetOrPut(newBtn.id, newBtn)
 
-macro buttonAux*[T, A](u: UI[T, A], id, label: string, blk: untyped): auto =
+macro buttonAux*[T, A](u: UI[T, A], id, label: untyped, blk: untyped): auto =
   buttonChecks[layoutId & "|" & $id] = quote do: `blk`
   quote do:
     block: registerButton(`u`, initButton(`label`, `id`))
 
-macro buttonAux*[T, A](u: UI[T, A], label: string, blk: untyped): auto =
-  let id = $label
+macro buttonAux*[T, A](u: UI[T, A], label: untyped, blk: untyped): auto =
+  let id = label.repr
   buttonChecks[layoutId & "|" & id] = quote do: `blk`
   quote do:
     block: registerButton(`u`, initButton(`label`, `id`))
 
+## TODO: runtime buttons
+
 template button*[T, A](u: UI[T, A], label: string, blk: untyped): auto =
   buttonAux(u, label, blk)
+
 template button*[T, A](u: UI[T, A], id, label: string, blk: untyped): auto =
   buttonAux(u, id, label, blk)
 
