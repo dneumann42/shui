@@ -49,6 +49,9 @@ proc initUI*[A](theme: Theme): StatelessUI[A] =
 proc initStaticUI*(theme: Theme, blk: proc(): void): StaticUI =
   result = StaticUI(theme: theme)
 
+proc invalidate*[T, A](ui: UI[T, A]) =
+  ui.shouldRerender = true
+
 proc emit*[T, A](ui: UI[T, A], action: sink A) =
   ui.actions.add(action)
 
