@@ -14,7 +14,6 @@ type
 
     updateButton*: proc(button: Button): void
 
-    drawDialog*: proc(dialog: Dialog): void
     drawButton*: proc(button: Button): void
     drawLabel*: proc(label: Label): void
 
@@ -25,7 +24,6 @@ proc initTheme*(): Theme =
 
     updateButton: proc(_: Button) = discard,
 
-    drawDialog: proc(_: Dialog) = discard,
     drawButton: proc(_: Button) = discard,
     drawLabel: proc(_: Label) = discard)
 

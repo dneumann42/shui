@@ -30,11 +30,6 @@ type
   Layout* = ref object of Widget
     nodes*: seq[Widget]
 
-  Dialog* = ref object of Widget
-    id*: string
-    layout* {.cursor.}: Layout
-    noBackdrop* = false
-
   Panel* = ref object of Layout
     fixedSize* = none((float, float))
 
@@ -73,7 +68,6 @@ proc name*(widget: Widget): string =
   elif widget of Panel: "Panel"
   elif widget of Button: "Button"
   elif widget of Label: "Label"
-  elif widget of Dialog: "Dialog"
   else: "Widget"
 
 proc `$`*(widget: Widget): string =
@@ -82,10 +76,6 @@ proc `$`*(widget: Widget): string =
     result &= "("
     for i, node in enumerate(widget.Layout.nodes):
       result &= $node & (if i < widget.Layout.nodes.len - 1: ", " else: "")
-    result &= ")"
-  elif widget of Dialog:
-    result = "("
-    result &= " " & $widget.Dialog.layout
     result &= ")"
 
 proc `+`*(a, b: (float, float)): (float, float) =
@@ -124,30 +114,6 @@ proc add*(l: Layout, nodes: varargs[Widget]) =
       continue
     node.base = l
     l.nodes.add(node)
-
-proc getDialogById*(root: Widget, dialogId: string): Option[Dialog] =
-  if root of Element:
-    return none(Dialog)
-  elif root of Layout:
-    for node in root.Layout.nodes:
-      if Some(@dialog) ?= getDialogById(node, dialogId):
-        return dialog.some
-  elif root of Dialog:
-    if root.Dialog.id == dialogId:
-      return root.Dialog.some()
-    else:
-      return getDialogById(root.Dialog.layout, dialogId)
-
-proc getDialogs*(root: Widget): seq[Dialog] =
-  result = @[]
-  if root of Element:
-    return
-  elif root of Layout:
-    for node in root.Layout.nodes:
-      result = result.concat(node.getDialogs())
-  elif root of Dialog:
-    result = root.Dialog.layout.getDialogs()
-    result.add(root.Dialog)
 
 proc label*(text = ""): Label =
   result = Label(text: text)

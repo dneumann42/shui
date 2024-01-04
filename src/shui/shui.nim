@@ -91,8 +91,6 @@ proc measureSize*(theme: Theme, widget: Widget): (float, float) =
     measureLayout(widget.Layout, theme)
   elif widget of Element:
     theme.measureElement(widget.Element)
-  elif widget of Dialog:
-    theme.measureSize(widget.Dialog.layout)
   else:
     raise WidgetError.newException("expected element")
 
@@ -108,13 +106,6 @@ proc updateWidget*(theme: Theme, widget: Widget, cursor: var (float, float),
 
 proc updateLayout*(theme: Theme, layout: Layout, inDialog = false)
 
-proc updateDialogAux*(theme: Theme, dialog: Dialog) =
-  # if not dialog.layout.isNil:
-  #   dialog.size = theme.measureSize(dialog)
-  #   dialog.pos = (0.0, 0.0)
-  #   theme.updateLayout(dialog.layout, inDialog = true)
-  discard
-
 proc updateLayout*(theme: Theme, layout: Layout, inDialog = false) =
   var cursor = (0.0, 0.0)
   for node in layout.nodes.mitems:
@@ -127,10 +118,6 @@ proc updateLayout*(theme: Theme, layout: Layout, inDialog = false) =
 proc updateWidget*(theme: Theme, widget: Widget, cursor: var (float, float),
     inDialog = false) =
   if widget.isNil:
-    return
-
-  if widget of Dialog and not widget.isNil:
-    theme.updateDialogAux(widget.Dialog)
     return
 
   let size = theme.measureSize(widget)
@@ -218,10 +205,6 @@ method render(layout: Layout, theme: Theme) =
   for i, node in layout.nodes:
     render(node, theme)
 
-method render(dialog: Dialog, theme: Theme) =
-  theme.drawDialog(dialog)
-  render(dialog.layout, theme)
-
 method render(elem: Element, theme: Theme) =
   if elem of Button:
     theme.drawButton(elem.Button)
@@ -299,15 +282,6 @@ macro layout*(ui: untyped, id: string, blk: untyped) =
 macro dialog*[T, A](ui: UI[T, A], id: string, blk: untyped): auto =
   quote do:
     if `ui`.isOpen(`id`):
-      let node = `blk`
-      Dialog(id: `id`, layout: node)
-    else:
-      nil
-
-macro customDialog*[T, A](ui: UI[T, A], id: string, blk: untyped): auto =
-  quote do:
-    if `ui`.isOpen(`id`):
-      let node = `blk`
-      Dialog(id: `id`, layout: node, noBackdrop: true)
+      `blk`
     else:
       nil
