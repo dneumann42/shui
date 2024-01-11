@@ -121,6 +121,9 @@ proc label*(text = ""): Label =
 proc initButton*(text = "", id: string): Button =
   result = Button(text: text, id: id)
 
+proc isActive*(w: Widget): bool =
+  w.state == active
+
 template panel*(blk: untyped): Panel =
   let (w, h) = blk()
   Panel(nodes: @[], fixedSize: (w, h).some)
