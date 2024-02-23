@@ -48,14 +48,18 @@ ui.update (action: TodoAction) =>
   none(State)
 
 ui.layout proc(emit: (TodoAction) -> void): Widget =
-  vertical(
-    label("Are you sure?"),
-    horizontal(
-      button("Cancel") do(): discard,
-      button("Confirm") do(): discard),
-    horizontal(
-      button("aaa") do(): discard,
-      button("bbb") do(): discard))
+  doVertical:
+    label("Are you sure?")
+    doHorizontal:
+      button("Cancel") do(): 
+        discard
+      button("Confirm") do(): 
+        discard
+    doHorizontal:
+      button("aaa") do(): 
+        discard
+      button("bbb") do(): 
+        discard
 
 when isMainModule:
   ui.render(

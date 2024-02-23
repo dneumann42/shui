@@ -135,3 +135,4 @@ proc vertical*(nodes: varargs[Widget]): Layout =
 proc horizontal*(nodes: varargs[Widget]): Layout =
   result = Horizontal(nodes: @[])
   result.add(nodes)
+
