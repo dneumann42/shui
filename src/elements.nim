@@ -29,6 +29,7 @@ type
     box*: Box
     size*: Sizing
     dir*: Direction
+    gap*: float
 
 proc isFixed*(elem: Elem, dir: Direction): bool =
   elem.size[dir].kind == Fixed

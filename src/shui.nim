@@ -45,6 +45,10 @@ proc calculateFittedSize(elem: Elem, dir: Direction): float =
       else:
         result = max(result, child.box.h)
 
+  # Add gap spacing between children in the layout direction
+  if elem.dir == dir and elem.children.len > 1:
+    result += elem.gap * (elem.children.len - 1).toFloat
+
 proc updateLayout*(elem: Elem) =
   # First pass: set all fixed sizes
   elem.updateFixedSize()
@@ -84,6 +88,10 @@ proc updateLayout*(elem: Elem) =
             else:
               usedSpace += child.box.h
 
+        # Add gap spacing in the layout direction
+        if e.dir == dir and e.children.len > 1:
+          usedSpace += e.gap * (e.children.len - 1).toFloat
+
         if e.dir == dir and growCount > 0:
           # Same direction: distribute remaining space among grow children
           let availableSpace = max(0.0, totalSpace - usedSpace)
@@ -120,15 +128,19 @@ proc updateLayout*(elem: Elem) =
   # Final pass: set positions
   proc updatePositions(e: Elem) =
     var cursor = 0.0
-    for child in e.children:
+    for i, child in e.children.pairs:
       if e.dir == Row:
         child.box.x = e.box.x + cursor
         child.box.y = e.box.y
         cursor += child.box.w
+        if i < e.children.len - 1:
+          cursor += e.gap
       else:
         child.box.x = e.box.x
         child.box.y = e.box.y + cursor
         cursor += child.box.h
+        if i < e.children.len - 1:
+          cursor += e.gap
       updatePositions(child)
 
   updatePositions(elem)
@@ -178,16 +190,17 @@ when isMainModule:
   var root = Elem(
     dir: Col,
     size: [SizingAxis(kind: Fixed, fixed: 600), SizingAxis(kind: Fixed, fixed: 400)],
+    gap: 0.0,
   )
 
-  var z = Elem(dir: Row, size: [SizingAxis(kind: Fit), SizingAxis(kind: Grow)])
+  var z =
+    Elem(dir: Row, size: [SizingAxis(kind: Fit), SizingAxis(kind: Grow)], gap: 0.0)
   var y =
-    Elem(dir: Row, size: [SizingAxis(kind: Grow), SizingAxis(kind: Grow)])
+    Elem(dir: Row, size: [SizingAxis(kind: Grow), SizingAxis(kind: Grow)], gap: 0.0)
   var x =
-    Elem(dir: Row, size: [SizingAxis(kind: Grow), SizingAxis(kind: Grow)])
+    Elem(dir: Row, size: [SizingAxis(kind: Grow), SizingAxis(kind: Grow)], gap: 0.0)
 
-  var u =
-    Elem(dir: Row, size: [SizingAxis(kind: Grow), SizingAxis(kind: Grow)])
+  var u = Elem(dir: Row, size: [SizingAxis(kind: Grow), SizingAxis(kind: Grow)])
   var v =
     Elem(dir: Row, size: [SizingAxis(kind: Fixed, fixed: 100), SizingAxis(kind: Grow)])
 
@@ -209,22 +222,7 @@ when isMainModule:
   x.addChild(u)
   x.addChild(v)
 
-
-  echo "Before layout:"
-  echo &"root: {root.box}"
-  echo &"z: {z.box}"
-  echo &"y: {y.box}"
-  echo &"a: {a.box}"
-  echo &"b: {b.box}"
-
   root.updateLayout()
-
-  echo "After layout:"
-  echo &"root: {root.box}"
-  echo &"z: {z.box}"
-  echo &"y: {y.box}"
-  echo &"a: {a.box}"
-  echo &"b: {b.box}"
 
   root.debugRender(ctx)
 
