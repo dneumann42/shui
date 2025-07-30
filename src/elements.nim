@@ -2,8 +2,8 @@ type
   Box* = tuple[x, y, w, h: float]
 
   Direction* = enum
-    Col
     Row
+    Col
 
   SizingKind* = enum
     Fixed
