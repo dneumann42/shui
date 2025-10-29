@@ -1,6 +1,6 @@
 # import std/hashes
 
-import chroma, macros
+import chroma, macros, sequtils
 export chroma, macros
 
 type
@@ -92,8 +92,8 @@ proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
 
   if w.text.len > 0:
     let (tw, th) = ui.measureText(w.text)
-    ui.get(widgetIndex).box.w = tw
-    ui.get(widgetIndex).box.h = th
+    ui.get(widgetIndex).box.w += tw
+    ui.get(widgetIndex).box.h += th
     return
 
   var
@@ -120,6 +120,27 @@ proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
     if w.size.h.kind == Fit:
       ui.get(widgetIndex).box.h = max(w.size.h.min, totalHeight)
 
+proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
+  # This traverses top to bottom of the tree
+  # each node can assume it has been positioned already
+  let w = ui.get(widgetIndex)
+
+  var 
+    cursorX = w.box.x
+    cursorY = w.box.y
+
+  for child in ui.items(widgetIndex):
+    if w.dir == Row:
+      ui.get(child).box.x = cursorX
+      cursorX += ui.get(child).box.w
+    else:
+      ui.get(child).box.y = cursorY
+      cursorY += ui.get(child).box.h
+    ui.updateLayout(child)
+
+proc updateLayout*(ui: var UI) =
+  ui.updateLayout(ui.root)
+
 proc endWidget*(ui: var UI, parent, widgetIndex: WidgetIndex) =
   if parent.int != -1:
     ui.add(parent, widgetIndex)
@@ -144,9 +165,6 @@ macro widget*(blk: untyped) =
       let widgetIndex {.inject.} = ui.beginWidget(Widget(), parent)
       `newBlk`
       ui.endWidget(parent, widgetIndex)
-
-proc updateLayout*(ui: var UI) =
-  discard
 
 proc draw*(ui: var UI, widget: Widget) =
   if ui.hasDraw():
