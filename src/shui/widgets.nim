@@ -28,12 +28,19 @@ type
     padding* = 8
     gap* = 8
 
+  Align* = enum
+    Start
+    Center
+    End
+
   Widget* = object
     size*: tuple[w, h: Sizing]
     state*: WidgetState
     text*: string
     style*: Style
     dir*: Direction
+    align*: Align
+    textAlign*: Align
     children: seq[WidgetIndex]
     box*: tuple[x, y, w, h: int]
 
@@ -87,6 +94,16 @@ proc beginWidget*(ui: var UI, widget: Widget, parent = WidgetIndex(-1)): WidgetI
 proc add*(ui: var UI, parent, child: WidgetIndex) =
   ui.get(parent).children.add(child)
 
+proc getDimensions*(
+    ui: var UI, widgetIndex: WidgetIndex
+): tuple[w, h, maxW, maxH: int] =
+  for child in ui.items(widgetIndex):
+    let (_, _, w, h) = ui.get(child).box
+    result.w += w
+    result.h += h
+    result.maxW = max(result.maxW, w)
+    result.maxH = max(result.maxH, h)
+
 proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
   let w = ui.get(widgetIndex)
 
@@ -96,18 +113,7 @@ proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
     ui.get(widgetIndex).box.h += th
     return
 
-  var
-    totalWidth = 0
-    totalHeight = 0
-    maxWidth = 0
-    maxHeight = 0
-
-  for child in ui.items(widgetIndex):
-    let (_, _, w, h) = ui.get(child).box
-    totalWidth += w
-    totalHeight += h
-    maxWidth = max(maxWidth, w)
-    maxHeight = max(maxHeight, h)
+  let (totalWidth, totalHeight, maxWidth, maxHeight) = ui.getDimensions(widgetIndex)
 
   if w.dir == Row:
     if w.size.w.kind == Fit:
@@ -191,9 +197,11 @@ proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
   # each node can assume it has been positioned already
   let w = ui.get(widgetIndex)
 
-  var 
+  var
     cursorX = w.box.x
     cursorY = w.box.y
+
+  let (width, height, maxW, maxH) = ui.getDimensions(widgetIndex)
 
   for child in ui.items(widgetIndex):
     if w.dir == Row:
@@ -206,11 +214,23 @@ proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
       cursorY += ui.get(child).box.h
     ui.updateLayout(child)
 
+    if w.align == Center:
+      if w.dir == Row:
+        ui.get(child).box.x += (w.box.w.toFloat / 2.0 - width.toFloat / 2.0).int
+      else:
+        ui.get(child).box.y += (w.box.h.toFloat / 2.0 - height.toFloat / 2.0).int
+    elif w.align == End:
+      if w.dir == Row:
+        ui.get(child).box.x += (w.box.w.toFloat - width.toFloat).int
+      else:
+        ui.get(child).box.y += (w.box.h.toFloat - height.toFloat).int
+
 proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
   ui.get(ui.root).box = container
-  ui.get(ui.root).size = ( #
-    w: Sizing(kind: Fixed, min: container.w, max: container.w), 
-    h: Sizing(kind: Fixed, min: container.h, max: container.h)
+  ui.get(ui.root).size = (
+    #
+    w: Sizing(kind: Fixed, min: container.w, max: container.w),
+    h: Sizing(kind: Fixed, min: container.h, max: container.h),
   )
   ui.updateGrowContainer(ui.root)
   ui.updateLayout(ui.root)

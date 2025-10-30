@@ -11,7 +11,7 @@ when isMainModule:
   var ctx = newContext(image)
   ctx.font = "Inter-Regular.ttf"
   ctx.fontSize = 12
-  
+
   # ctx.fillStyle = color(0.0, 1.0, 0.0)
   # ctx.fillRect(rect(vec2(0, 24), vec2(32, 32)))
 
@@ -33,24 +33,24 @@ when isMainModule:
     let metrics = ctx.measureText(text)
     result = (w: metrics.width.int, h: 12)
 
-  widget: #0
-    size = (w: Sizing(kind: Fit), h: Sizing(kind: Grow))
+  widget:
+    size = (w: Sizing(kind: Grow), h: Sizing(kind: Grow))
     style = Style(bg: color(0.3, 0.3, 0.3, 1.0))
     dir = Col
+    align = Center
     widget:
-      text = "Hello" 
-      style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
-    widget:
-      text = "World" 
-      style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
-      size = (w: Sizing(kind: Fit), h: Sizing(kind: Grow))
-    widget:
-      text = "Right" 
-      style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
-      size = (w: Sizing(kind: Fit), h: Sizing(kind: Grow))
-    widget:
-      text = "123" 
-      style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
+      size = (w: Sizing(kind: Grow), h: Sizing(kind: Grow))
+      dir = Row
+      align = Center
+      widget:
+        text = "Hello"
+        style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
+      widget:
+        text = "World"
+        style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
+      widget:
+        text = "Test"
+        style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
 
   ui.updateLayout((0, 0, 640, 480))
   ui.draw()
