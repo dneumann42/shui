@@ -34,30 +34,25 @@ when isMainModule:
     result = (w: metrics.width.int, h: 12)
 
   widget: #0
-    size = (w: Sizing(kind: Fit), h: Sizing(kind: Fit))
+    size = (w: Sizing(kind: Fit), h: Sizing(kind: Grow))
     style = Style(bg: color(0.3, 0.3, 0.3, 1.0))
     dir = Col
-    widget: #1
-      style = Style(fg: color(1.0, 0.0, 1.0, 1.0))
-      text = "Hello"
-    widget: #2
-      style = Style(fg: color(1.0, 0.0, 1.0, 1.0))
-      text = "World"
-    widget: #3
-      size = (w: Sizing(kind: Fit), h: Sizing(kind: Fit))
-      style = Style(bg: color(0.3, 0.0, 0.3, 1.0))
-      dir = Row
-      widget: #4
-        style = Style(fg: color(1.0, 0.0, 1.0, 1.0))
-        text = "Left"
-      widget: #5
-        style = Style(fg: color(1.0, 0.0, 1.0, 1.0))
-        text = "Right"
-    widget: #6
-      style = Style(fg: color(1.0, 0.0, 1.0, 1.0))
-      text = "Ahhhhhh"
+    widget:
+      text = "Hello" 
+      style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
+    widget:
+      text = "World" 
+      style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
+      size = (w: Sizing(kind: Fit), h: Sizing(kind: Grow))
+    widget:
+      text = "Right" 
+      style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
+      size = (w: Sizing(kind: Fit), h: Sizing(kind: Grow))
+    widget:
+      text = "123" 
+      style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
 
-  ui.updateLayout()
+  ui.updateLayout((0, 0, 640, 480))
   ui.draw()
 
   image.writeFile("out.png")

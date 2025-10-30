@@ -1,6 +1,6 @@
 # import std/hashes
 
-import chroma, macros, sequtils
+import chroma, macros
 export chroma, macros
 
 type
@@ -120,6 +120,72 @@ proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
     if w.size.h.kind == Fit:
       ui.get(widgetIndex).box.h = max(w.size.h.min, totalHeight)
 
+proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
+  let w = ui.get(widgetIndex)
+
+  if w.dir == Row:
+    var
+      fixedWidth = 0
+      growChildren: seq[tuple[index: WidgetIndex, base: int]]
+
+    for child in ui.items(widgetIndex):
+      let childWidget = ui.get(child)
+      if childWidget.size.w.kind == Grow:
+        growChildren.add((index: child, base: childWidget.box.w))
+      else:
+        fixedWidth += childWidget.box.w
+
+    let growCount = growChildren.len
+    if growCount > 0:
+      let available = max(w.box.w - fixedWidth, 0)
+      let share = available div growCount
+      var remainder = available mod growCount
+      for childInfo in growChildren:
+        let child = childInfo.index
+        let sizing = ui.get(child).size.w
+        var targetWidth = max(share, childInfo.base)
+        if remainder > 0:
+          inc targetWidth
+          dec remainder
+        if sizing.min > 0:
+          targetWidth = max(targetWidth, sizing.min)
+        if sizing.max > 0:
+          targetWidth = min(targetWidth, sizing.max)
+        ui.get(child).box.w = targetWidth
+
+  if w.dir == Col:
+    var
+      fixedHeight = 0
+      growChildren: seq[tuple[index: WidgetIndex, base: int]]
+
+    for child in ui.items(widgetIndex):
+      let childWidget = ui.get(child)
+      if childWidget.size.h.kind == Grow:
+        growChildren.add((index: child, base: childWidget.box.h))
+      else:
+        fixedHeight += childWidget.box.h
+
+    let growCount = growChildren.len
+    if growCount > 0:
+      let available = max(w.box.h - fixedHeight, 0)
+      let share = available div growCount
+      var remainder = available mod growCount
+      for childInfo in growChildren:
+        let child = childInfo.index
+        let sizing = ui.get(child).size.h
+        var targetHeight = max(share, childInfo.base)
+        if remainder > 0:
+          inc targetHeight
+          dec remainder
+        if sizing.min > 0:
+          targetHeight = max(targetHeight, sizing.min)
+        if sizing.max > 0:
+          targetHeight = min(targetHeight, sizing.max)
+        ui.get(child).box.h = targetHeight
+
+  for child in ui.items(widgetIndex):
+    ui.updateGrowContainer(child)
+
 proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
   # This traverses top to bottom of the tree
   # each node can assume it has been positioned already
@@ -132,13 +198,21 @@ proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
   for child in ui.items(widgetIndex):
     if w.dir == Row:
       ui.get(child).box.x = cursorX
+      ui.get(child).box.y = w.box.y
       cursorX += ui.get(child).box.w
     else:
+      ui.get(child).box.x = w.box.x
       ui.get(child).box.y = cursorY
       cursorY += ui.get(child).box.h
     ui.updateLayout(child)
 
-proc updateLayout*(ui: var UI) =
+proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
+  ui.get(ui.root).box = container
+  ui.get(ui.root).size = ( #
+    w: Sizing(kind: Fixed, min: container.w, max: container.w), 
+    h: Sizing(kind: Fixed, min: container.h, max: container.h)
+  )
+  ui.updateGrowContainer(ui.root)
   ui.updateLayout(ui.root)
 
 proc endWidget*(ui: var UI, parent, widgetIndex: WidgetIndex) =
