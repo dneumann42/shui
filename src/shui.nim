@@ -1,4 +1,5 @@
-import shui/widgets
+import shui/elements
+export elements
 
 import pixie
 
@@ -12,10 +13,7 @@ when isMainModule:
   ctx.font = "Inter-Regular.ttf"
   ctx.fontSize = 12
 
-  # ctx.fillStyle = color(0.0, 1.0, 0.0)
-  # ctx.fillRect(rect(vec2(0, 24), vec2(32, 32)))
-
-  ui.onDraw = proc(w: Widget) =
+  ui.onDraw = proc(w: Elem) =
     ctx.beginPath()
     ctx.fillStyle = w.style.bg
     if w.style.borderRadius == 0.0:
@@ -63,19 +61,19 @@ when isMainModule:
     let metrics = ctx.measureText(text)
     result = (w: metrics.width.int, h: 12)
 
-  widget:
+  elem:
     size = (w: Sizing(kind: Grow), h: Sizing(kind: Grow))
     style = Style(bg: color(0.3, 0.3, 0.3, 1.0))
     dir = Col
     align = Center
     crossAlign = Center
-    widget:
+    elem:
       size = (w: Sizing(kind: Grow), h: Sizing(kind: Fit))
       style = Style(bg: color(0.0, 0.0, 0.3, 1.0), padding: 8)
       dir = Row
       align = Center
       crossAlign = Center
-      widget:
+      elem:
         text = "Hello"
         style = Style(
           fg: color(1.0, 1.0, 1.0, 1.0),
@@ -84,10 +82,10 @@ when isMainModule:
           borderRadius: 8.0,
         )
         border = 2
-      widget:
+      elem:
         text = "World"
         style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
-      widget:
+      elem:
         text = "Test"
         style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
 

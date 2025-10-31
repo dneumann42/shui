@@ -13,7 +13,7 @@ type
     min*, max*: int
     kind*: SizingKind
 
-  WidgetState* = enum
+  ElemState* = enum
     Dead
     Visible
     Disabled
@@ -33,9 +33,9 @@ type
     Center
     End
 
-  Widget* = object
+  Elem* = object
     size*: tuple[w, h: Sizing]
-    state*: WidgetState
+    state*: ElemState
     text*: string
     style*: Style
     dir*: Direction
@@ -44,70 +44,68 @@ type
     textAlign*: Align
     border*: int
     box*: tuple[x, y, w, h: int]
-    children: seq[WidgetIndex]
+    children: seq[ElemIndex]
 
-  WidgetIndex* = distinct int
+  ElemIndex* = distinct int
 
   UI* = object
-    root = WidgetIndex(-1)
-    widgets: seq[Widget]
-    drawWidget: proc(widget: Widget): void
+    root = ElemIndex(-1)
+    elems: seq[Elem]
+    drawElem: proc(elem: Elem): void
     measureText: proc(text: string): tuple[w, h: int]
 
-proc `onDraw=`*(ui: var UI, fn: proc(widget: Widget): void) =
-  ui.drawWidget = fn
+proc `onDraw=`*(ui: var UI, fn: proc(elem: Elem): void) =
+  ui.drawElem = fn
 
 proc `onMeasureText=`*(ui: var UI, fn: proc(text: string): tuple[w, h: int]) =
   ui.measureText = fn
 
 proc hasDraw*(ui: var UI): bool =
-  ui.drawWidget.isNil == false
+  ui.drawElem.isNil == false
 
 proc hasMeasureText*(ui: var UI): bool =
   ui.measureText.isNil == false
 
-proc `[]=`*(ui: var UI, index: WidgetIndex, widget: Widget) =
-  ui.widgets[int(index)] = widget
+proc `[]=`*(ui: var UI, index: ElemIndex, elem: Elem) =
+  ui.elems[int(index)] = elem
 
-proc `[]`*(ui: var UI, index: WidgetIndex): var Widget =
-  result = ui.widgets[int(index)]
+proc `[]`*(ui: var UI, index: ElemIndex): var Elem =
+  result = ui.elems[int(index)]
 
-proc get*(ui: var UI, index: WidgetIndex): var Widget {.inline.} =
+proc get*(ui: var UI, index: ElemIndex): var Elem {.inline.} =
   ui[index]
 
-iterator items*(ui: var UI, widget: WidgetIndex): WidgetIndex =
-  for child in ui.get(widget).children:
+iterator items*(ui: var UI, elem: ElemIndex): ElemIndex =
+  for child in ui.get(elem).children:
     yield child
 
-iterator items*(ui: var UI): WidgetIndex =
+iterator items*(ui: var UI): ElemIndex =
   for child in ui.items(ui.root):
     yield child
 
-proc createWidget*(ui: var UI): WidgetIndex =
-  ui.widgets.add(Widget())
-  result = WidgetIndex(ui.widgets.len - 1)
+proc createElem*(ui: var UI): ElemIndex =
+  ui.elems.add(Elem())
+  result = ElemIndex(ui.elems.len - 1)
 
-proc beginWidget*(ui: var UI, widget: Widget, parent = WidgetIndex(-1)): WidgetIndex =
-  result = ui.createWidget()
-  ui[result] = widget
+proc beginElem*(ui: var UI, elem: Elem, parent = ElemIndex(-1)): ElemIndex =
+  result = ui.createElem()
+  ui[result] = elem
   if parent.int == -1:
     ui.root = result
 
-proc add*(ui: var UI, parent, child: WidgetIndex) =
+proc add*(ui: var UI, parent, child: ElemIndex) =
   ui.get(parent).children.add(child)
 
-proc getDimensions*(
-    ui: var UI, widgetIndex: WidgetIndex
-): tuple[w, h, maxW, maxH: int] =
-  let container = ui.get(widgetIndex)
+proc getDimensions*(ui: var UI, elemIndex: ElemIndex): tuple[w, h, maxW, maxH: int] =
+  let container = ui.get(elemIndex)
   let gap = container.style.gap
   let dir = container.dir
   var childCount = 0
-  for child in ui.items(widgetIndex):
-    let childWidget = ui.get(child)
-    let (_, _, w, h) = childWidget.box
-    let effW = max(w, childWidget.size.w.min)
-    let effH = max(h, childWidget.size.h.min)
+  for child in ui.items(elemIndex):
+    let childElem = ui.get(child)
+    let (_, _, w, h) = childElem.box
+    let effW = max(w, childElem.size.w.min)
+    let effH = max(h, childElem.size.h.min)
     result.w += effW
     result.h += effH
     result.maxW = max(result.maxW, effW)
@@ -121,41 +119,41 @@ proc getDimensions*(
     else:
       result.h += totalGap
 
-proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
-  let w = ui.get(widgetIndex)
+proc updateDimensions*(ui: var UI, elemIndex: ElemIndex) =
+  let w = ui.get(elemIndex)
   let padding = w.style.padding * 2
 
   if w.text.len > 0:
     let (tw, th) = ui.measureText(w.text)
-    ui.get(widgetIndex).box.w = tw + padding
-    ui.get(widgetIndex).box.h = th + padding
+    ui.get(elemIndex).box.w = tw + padding
+    ui.get(elemIndex).box.h = th + padding
     return
 
-  let (totalWidth, totalHeight, maxWidth, maxHeight) = ui.getDimensions(widgetIndex)
+  let (totalWidth, totalHeight, maxWidth, maxHeight) = ui.getDimensions(elemIndex)
 
   if w.dir == Row:
     if w.size.w.kind == Fit:
-      ui.get(widgetIndex).box.w = max(w.size.w.min, totalWidth)
+      ui.get(elemIndex).box.w = max(w.size.w.min, totalWidth)
     if w.size.h.kind == Fit:
-      ui.get(widgetIndex).box.h = max(w.size.h.min, maxHeight)
+      ui.get(elemIndex).box.h = max(w.size.h.min, maxHeight)
   else:
     if w.size.w.kind == Fit:
-      ui.get(widgetIndex).box.w = max(w.size.w.min, maxWidth)
+      ui.get(elemIndex).box.w = max(w.size.w.min, maxWidth)
     if w.size.h.kind == Fit:
-      ui.get(widgetIndex).box.h = max(w.size.h.min, totalHeight)
+      ui.get(elemIndex).box.h = max(w.size.h.min, totalHeight)
 
-  ui.get(widgetIndex).box.w += padding
-  ui.get(widgetIndex).box.h += padding
+  ui.get(elemIndex).box.w += padding
+  ui.get(elemIndex).box.h += padding
 
-  let sizing = ui.get(widgetIndex).size
+  let sizing = ui.get(elemIndex).size
   if sizing.w.min > 0:
-    ui.get(widgetIndex).box.w = max(ui.get(widgetIndex).box.w, sizing.w.min)
+    ui.get(elemIndex).box.w = max(ui.get(elemIndex).box.w, sizing.w.min)
   if sizing.w.max > 0:
-    ui.get(widgetIndex).box.w = min(ui.get(widgetIndex).box.w, sizing.w.max)
+    ui.get(elemIndex).box.w = min(ui.get(elemIndex).box.w, sizing.w.max)
   if sizing.h.min > 0:
-    ui.get(widgetIndex).box.h = max(ui.get(widgetIndex).box.h, sizing.h.min)
+    ui.get(elemIndex).box.h = max(ui.get(elemIndex).box.h, sizing.h.min)
   if sizing.h.max > 0:
-    ui.get(widgetIndex).box.h = min(ui.get(widgetIndex).box.h, sizing.h.max)
+    ui.get(elemIndex).box.h = min(ui.get(elemIndex).box.h, sizing.h.max)
 
 proc clampDimension(value: int, sizing: Sizing): int =
   result = value
@@ -164,8 +162,8 @@ proc clampDimension(value: int, sizing: Sizing): int =
   if sizing.max > 0:
     result = min(result, sizing.max)
 
-proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
-  let w = ui.get(widgetIndex)
+proc updateGrowContainer*(ui: var UI, elemIndex: ElemIndex) =
+  let w = ui.get(elemIndex)
   let gap = w.style.gap
   let padding = w.style.padding * 2
   let childCount = w.children.len
@@ -174,14 +172,14 @@ proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
   if w.dir == Row:
     var
       fixedWidth = 0
-      growChildren: seq[tuple[index: WidgetIndex, base: int]]
+      growChildren: seq[tuple[index: ElemIndex, base: int]]
 
-    for child in ui.items(widgetIndex):
-      let childWidget = ui.get(child)
-      if childWidget.size.w.kind == Grow:
-        growChildren.add((index: child, base: childWidget.box.w))
+    for child in ui.items(elemIndex):
+      let childElem = ui.get(child)
+      if childElem.size.w.kind == Grow:
+        growChildren.add((index: child, base: childElem.box.w))
       else:
-        fixedWidth += childWidget.box.w
+        fixedWidth += childElem.box.w
 
     let growCount = growChildren.len
     if growCount > 0:
@@ -204,14 +202,14 @@ proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
   if w.dir == Col:
     var
       fixedHeight = 0
-      growChildren: seq[tuple[index: WidgetIndex, base: int]]
+      growChildren: seq[tuple[index: ElemIndex, base: int]]
 
-    for child in ui.items(widgetIndex):
-      let childWidget = ui.get(child)
-      if childWidget.size.h.kind == Grow:
-        growChildren.add((index: child, base: childWidget.box.h))
+    for child in ui.items(elemIndex):
+      let childElem = ui.get(child)
+      if childElem.size.h.kind == Grow:
+        growChildren.add((index: child, base: childElem.box.h))
       else:
-        fixedHeight += childWidget.box.h
+        fixedHeight += childElem.box.h
 
     let growCount = growChildren.len
     if growCount > 0:
@@ -231,15 +229,15 @@ proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
           targetHeight = min(targetHeight, sizing.max)
         ui.get(child).box.h = targetHeight
 
-  for child in ui.items(widgetIndex):
+  for child in ui.items(elemIndex):
     ui.updateGrowContainer(child)
 
-proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
+proc updateLayout*(ui: var UI, elemIndex: ElemIndex) =
   # This traverses top to bottom of the tree
   # each node can assume it has been positioned already
-  let w = ui.get(widgetIndex)
+  let w = ui.get(elemIndex)
 
-  let (width, height, _, _) = ui.getDimensions(widgetIndex)
+  let (width, height, _, _) = ui.getDimensions(elemIndex)
   let paddingVal = w.style.padding
   let doublePad = paddingVal * 2
   let contentStartX = w.box.x + paddingVal
@@ -267,7 +265,7 @@ proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
   let childCount = w.children.len
   var childIndexCounter = 0
 
-  for child in ui.items(widgetIndex):
+  for child in ui.items(elemIndex):
     let childIndex = child
     let childSize = ui.get(childIndex).size
     if w.dir == Row:
@@ -326,65 +324,65 @@ proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
   ui.updateGrowContainer(ui.root)
   ui.updateLayout(ui.root)
 
-proc endWidget*(ui: var UI, parent, widgetIndex: WidgetIndex) =
+proc endElem*(ui: var UI, parent, elemIndex: ElemIndex) =
   if parent.int != -1:
-    ui.add(parent, widgetIndex)
-  ui.updateDimensions(widgetIndex)
+    ui.add(parent, elemIndex)
+  ui.updateDimensions(elemIndex)
 
-proc updateWidget(blk: NimNode): auto =
+proc updateElem(blk: NimNode): auto =
   result = blk
   for i in 0 ..< blk.len:
     if blk[i].kind == nnkAsgn:
       let dot = nnkDotExpr.newTree(newIdentNode("ui"), newIdentNode("get"))
-      let call = nnkCall.newTree(dot, newIdentNode("widgetIndex"))
+      let call = nnkCall.newTree(dot, newIdentNode("elemIndex"))
       blk[i] = nnkAsgn.newTree(nnkDotExpr.newTree(call, blk[i][0]), blk[i][1])
 
-macro widget*(blk: untyped) =
-  let newBlk = updateWidget(blk)
+macro elem*(blk: untyped) =
+  let newBlk = updateElem(blk)
   quote:
     block:
-      when compiles(widgetIndex):
-        let parent {.inject.} = widgetIndex
+      when compiles(elemIndex):
+        let parent {.inject.} = elemIndex
       else:
-        let parent {.inject.} = WidgetIndex(-1)
-      let widgetIndex {.inject.} = ui.beginWidget(Widget(), parent)
+        let parent {.inject.} = ElemIndex(-1)
+      let elemIndex {.inject.} = ui.beginElem(Elem(), parent)
       `newBlk`
-      ui.endWidget(parent, widgetIndex)
+      ui.endElem(parent, elemIndex)
 
-proc draw*(ui: var UI, widget: Widget) =
+proc draw*(ui: var UI, elem: Elem) =
   if ui.hasDraw():
-    ui.drawWidget(widget)
+    ui.drawElem(elem)
 
-proc draw*(ui: var UI, widgetIndex: WidgetIndex) =
-  ui.draw(ui.get(widgetIndex))
-  for widget in ui.items(widgetIndex):
-    ui.draw(widget)
+proc draw*(ui: var UI, elemIndex: ElemIndex) =
+  ui.draw(ui.get(elemIndex))
+  for elem in ui.items(elemIndex):
+    ui.draw(elem)
 
 proc draw*(ui: var UI) =
   ui.draw(ui.get(ui.root))
-  for widget in ui:
-    ui.draw(widget)
+  for elem in ui:
+    ui.draw(elem)
 
 proc writeLayout*(ui: UI, path: string) =
   var file = open(path, fmWrite)
   defer:
     file.close()
 
-  proc findParent(child: WidgetIndex): int =
-    for idx, widget in ui.widgets:
-      for c in widget.children:
+  proc findParent(child: ElemIndex): int =
+    for idx, elem in ui.elems:
+      for c in elem.children:
         if int(c) == int(child):
           return idx
     return -1
 
   file.writeLine("index parent dir align crossAlign x y w h text")
-  for idx, widget in ui.widgets:
-    let parent = findParent(WidgetIndex(idx))
+  for idx, elem in ui.elems:
+    let parent = findParent(ElemIndex(idx))
     let line =
-      "widget " & $idx & " parent " & $parent & " dir " & $widget.dir & " align " &
-      $widget.align & " crossAlign " & $widget.crossAlign & " box(" & $widget.box.x & "," &
-      $widget.box.y & "," & $widget.box.w & "," & $widget.box.h & ")" & " sizeW(" &
-      $widget.size.w.kind & "," & $widget.size.w.min & "," & $widget.size.w.max & ")" &
-      " sizeH(" & $widget.size.h.kind & "," & $widget.size.h.min & "," &
-      $widget.size.h.max & ")" & " text \"" & widget.text & "\""
+      "elem " & $idx & " parent " & $parent & " dir " & $elem.dir & " align " &
+      $elem.align & " crossAlign " & $elem.crossAlign & " box(" & $elem.box.x & "," &
+      $elem.box.y & "," & $elem.box.w & "," & $elem.box.h & ")" & " sizeW(" &
+      $elem.size.w.kind & "," & $elem.size.w.min & "," & $elem.size.w.max & ")" &
+      " sizeH(" & $elem.size.h.kind & "," & $elem.size.h.min & "," & $elem.size.h.max &
+      ")" & " text \"" & elem.text & "\""
     file.writeLine(line)
