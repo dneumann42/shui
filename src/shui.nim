@@ -16,6 +16,7 @@ when isMainModule:
   # ctx.fillRect(rect(vec2(0, 24), vec2(32, 32)))
 
   ui.onDraw = proc(w: Widget) =
+    ctx.beginPath()
     ctx.fillStyle = w.style.bg
     ctx.fillRect(
       rect(
@@ -23,6 +24,16 @@ when isMainModule:
         vec2(w.box.w.toFloat, w.box.h.toFloat),
       )
     )
+    if w.border > 0:
+      ctx.strokeStyle = w.style.border
+      ctx.lineWidth = w.border.toFloat
+      ctx.strokeRect(
+        rect(
+          vec2(w.box.x.toFloat, w.box.y.toFloat), #
+          vec2(w.box.w.toFloat, w.box.h.toFloat),
+        )
+      )
+
     if w.text.len > 0:
       ctx.fillStyle = w.style.fg
       let padding = w.style.padding.toFloat
@@ -42,14 +53,17 @@ when isMainModule:
     align = Center
     crossAlign = Center
     widget:
-      size = (w: Sizing(kind: Grow), h: Sizing(kind: Fixed, min: 64, max: 64))
-      style = Style(bg: color(0.0, 0.0, 0.3, 1.0))
+      size = (w: Sizing(kind: Grow), h: Sizing(kind: Fit))
+      style = Style(bg: color(0.0, 0.0, 0.3, 1.0), padding: 8)
       dir = Row
       align = Center
       crossAlign = Center
       widget:
         text = "Hello"
-        style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
+        style = Style(
+          fg: color(1.0, 1.0, 1.0, 1.0), border: color(1.0, 1.0, 1.0, 1.0), padding: 8
+        )
+        border = 2
       widget:
         text = "World"
         style = Style(fg: color(1.0, 1.0, 1.0, 1.0))

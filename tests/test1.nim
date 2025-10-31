@@ -5,13 +5,26 @@
 #
 # To run these tests, simply execute `nimble test`.
 
-import unittest, shui/widgets, macros
+import unittest
+import shui/widgets
 
-test "can add":
+test "widget macro builds children":
   var ui = UI()
+  ui.onMeasureText = proc(text: string): tuple[w, h: int] =
+    (w: 10, h: 12)
   widget:
-    size = Sizing(min: 100, max: 100, kind: Fixed)
+    size = (
+      w: Sizing(kind: Fixed, min: 100, max: 100),
+      h: Sizing(kind: Fixed, min: 100, max: 100),
+    )
+    style = Style(padding: 0, gap: 0)
+    dir = Col
+    align = Start
+    crossAlign = Start
     widget:
       text = "Hello, World"
     widget:
       text = "Hello, World"
+  ui.updateLayout((0, 0, 100, 100))
+  check ui.get(WidgetIndex(1)).text == "Hello, World"
+  check ui.get(WidgetIndex(2)).text == "Hello, World"

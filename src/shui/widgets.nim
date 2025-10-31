@@ -24,7 +24,6 @@ type
 
   Style* = object
     bg*, fg*, border*: Color
-    bordered* = false
     padding* = 0
     gap* = 8
 
@@ -42,8 +41,9 @@ type
     align*: Align
     crossAlign*: Align
     textAlign*: Align
-    children: seq[WidgetIndex]
+    border*: int
     box*: tuple[x, y, w, h: int]
+    children: seq[WidgetIndex]
 
   WidgetIndex* = distinct int
 
