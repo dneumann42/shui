@@ -40,6 +40,7 @@ type
     style*: Style
     dir*: Direction
     align*: Align
+    crossAlign*: Align
     textAlign*: Align
     children: seq[WidgetIndex]
     box*: tuple[x, y, w, h: int]
@@ -98,11 +99,14 @@ proc getDimensions*(
     ui: var UI, widgetIndex: WidgetIndex
 ): tuple[w, h, maxW, maxH: int] =
   for child in ui.items(widgetIndex):
-    let (_, _, w, h) = ui.get(child).box
-    result.w += w
-    result.h += h
-    result.maxW = max(result.maxW, w)
-    result.maxH = max(result.maxH, h)
+    let childWidget = ui.get(child)
+    let (_, _, w, h) = childWidget.box
+    let effW = max(w, childWidget.size.w.min)
+    let effH = max(h, childWidget.size.h.min)
+    result.w += effW
+    result.h += effH
+    result.maxW = max(result.maxW, effW)
+    result.maxH = max(result.maxH, effH)
 
 proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
   let w = ui.get(widgetIndex)
@@ -125,6 +129,23 @@ proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
       ui.get(widgetIndex).box.w = max(w.size.w.min, maxWidth)
     if w.size.h.kind == Fit:
       ui.get(widgetIndex).box.h = max(w.size.h.min, totalHeight)
+
+  let sizing = ui.get(widgetIndex).size
+  if sizing.w.min > 0:
+    ui.get(widgetIndex).box.w = max(ui.get(widgetIndex).box.w, sizing.w.min)
+  if sizing.w.max > 0:
+    ui.get(widgetIndex).box.w = min(ui.get(widgetIndex).box.w, sizing.w.max)
+  if sizing.h.min > 0:
+    ui.get(widgetIndex).box.h = max(ui.get(widgetIndex).box.h, sizing.h.min)
+  if sizing.h.max > 0:
+    ui.get(widgetIndex).box.h = min(ui.get(widgetIndex).box.h, sizing.h.max)
+
+proc clampDimension(value: int, sizing: Sizing): int =
+  result = value
+  if sizing.min > 0:
+    result = max(result, sizing.min)
+  if sizing.max > 0:
+    result = min(result, sizing.max)
 
 proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
   let w = ui.get(widgetIndex)
@@ -197,33 +218,66 @@ proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
   # each node can assume it has been positioned already
   let w = ui.get(widgetIndex)
 
-  var
-    cursorX = w.box.x
-    cursorY = w.box.y
+  let (width, height, _, _) = ui.getDimensions(widgetIndex)
 
-  let (width, height, maxW, maxH) = ui.getDimensions(widgetIndex)
+  var mainOffset = 0
+  if w.align == Center:
+    if w.dir == Row:
+      mainOffset = max((w.box.w - width) div 2, 0)
+    else:
+      mainOffset = max((w.box.h - height) div 2, 0)
+  elif w.align == End:
+    if w.dir == Row:
+      mainOffset = max(w.box.w - width, 0)
+    else:
+      mainOffset = max(w.box.h - height, 0)
+
+  var
+    cursorX = w.box.x + (if w.dir == Row: mainOffset else: 0)
+    cursorY = w.box.y + (if w.dir == Col: mainOffset else: 0)
 
   for child in ui.items(widgetIndex):
+    let childIndex = child
+    let childSize = ui.get(childIndex).size
     if w.dir == Row:
-      ui.get(child).box.x = cursorX
-      ui.get(child).box.y = w.box.y
-      cursorX += ui.get(child).box.w
+      ui.get(childIndex).box.x = cursorX
+      ui.get(childIndex).box.y = w.box.y
     else:
-      ui.get(child).box.x = w.box.x
-      ui.get(child).box.y = cursorY
-      cursorY += ui.get(child).box.h
-    ui.updateLayout(child)
+      ui.get(childIndex).box.x = w.box.x
+      ui.get(childIndex).box.y = cursorY
 
-    if w.align == Center:
+    if w.dir == Col and childSize.w.kind == Grow:
+      ui.get(childIndex).box.w = clampDimension(w.box.w, childSize.w)
+    if w.dir == Row and childSize.h.kind == Grow:
+      ui.get(childIndex).box.h = clampDimension(w.box.h, childSize.h)
+
+    ui.updateLayout(childIndex)
+
+    if w.dir == Row:
+      cursorX += ui.get(childIndex).box.w
+    else:
+      cursorY += ui.get(childIndex).box.h
+
+    case w.crossAlign
+    of Center:
       if w.dir == Row:
-        ui.get(child).box.x += (w.box.w.toFloat / 2.0 - width.toFloat / 2.0).int
+        ui.get(childIndex).box.y =
+          w.box.y + max((w.box.h - ui.get(childIndex).box.h) div 2, 0)
       else:
-        ui.get(child).box.y += (w.box.h.toFloat / 2.0 - height.toFloat / 2.0).int
-    elif w.align == End:
+        ui.get(childIndex).box.x =
+          w.box.x + max((w.box.w - ui.get(childIndex).box.w) div 2, 0)
+    of End:
       if w.dir == Row:
-        ui.get(child).box.x += (w.box.w.toFloat - width.toFloat).int
+        ui.get(childIndex).box.y =
+          w.box.y + max(w.box.h - ui.get(childIndex).box.h, 0)
       else:
-        ui.get(child).box.y += (w.box.h.toFloat - height.toFloat).int
+        ui.get(childIndex).box.x =
+          w.box.x + max(w.box.w - ui.get(childIndex).box.w, 0)
+    else:
+      if w.dir == Row:
+        ui.get(childIndex).box.y = w.box.y
+      else:
+        ui.get(childIndex).box.x = w.box.x
 
 proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
   ui.get(ui.root).box = container
@@ -273,3 +327,42 @@ proc draw*(ui: var UI) =
   ui.draw(ui.get(ui.root))
   for widget in ui:
     ui.draw(widget)
+
+proc writeLayout*(ui: UI, path: string) =
+  var file = open(path, fmWrite)
+  defer: file.close()
+
+  proc findParent(child: WidgetIndex): int =
+    for idx, widget in ui.widgets:
+      for c in widget.children:
+        if int(c) == int(child):
+          return idx
+    return -1
+
+  file.writeLine("index parent dir align crossAlign x y w h text")
+  for idx, widget in ui.widgets:
+    let parent = findParent(WidgetIndex(idx))
+    let line =
+      "widget " &
+      $idx &
+      " parent " &
+      $parent &
+      " dir " &
+      $widget.dir &
+      " align " &
+      $widget.align &
+      " crossAlign " &
+      $widget.crossAlign &
+      " box(" &
+      $widget.box.x &
+      "," &
+      $widget.box.y &
+      "," &
+      $widget.box.w &
+      "," &
+      $widget.box.h &
+      ")" &
+      " text \"" &
+      widget.text &
+      "\""
+    file.writeLine(line)
