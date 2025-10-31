@@ -98,6 +98,10 @@ proc add*(ui: var UI, parent, child: WidgetIndex) =
 proc getDimensions*(
     ui: var UI, widgetIndex: WidgetIndex
 ): tuple[w, h, maxW, maxH: int] =
+  let container = ui.get(widgetIndex)
+  let gap = container.style.gap
+  let dir = container.dir
+  var childCount = 0
   for child in ui.items(widgetIndex):
     let childWidget = ui.get(child)
     let (_, _, w, h) = childWidget.box
@@ -107,6 +111,14 @@ proc getDimensions*(
     result.h += effH
     result.maxW = max(result.maxW, effW)
     result.maxH = max(result.maxH, effH)
+    inc childCount
+
+  if childCount > 1 and gap != 0:
+    let totalGap = gap * (childCount - 1)
+    if dir == Row:
+      result.w += totalGap
+    else:
+      result.h += totalGap
 
 proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
   let w = ui.get(widgetIndex)
@@ -149,6 +161,9 @@ proc clampDimension(value: int, sizing: Sizing): int =
 
 proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
   let w = ui.get(widgetIndex)
+  let gap = w.style.gap
+  let childCount = w.children.len
+  let gapTotal = gap * max(childCount - 1, 0)
 
   if w.dir == Row:
     var
@@ -164,7 +179,7 @@ proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
 
     let growCount = growChildren.len
     if growCount > 0:
-      let available = max(w.box.w - fixedWidth, 0)
+      let available = max(w.box.w - fixedWidth - gapTotal, 0)
       let share = available div growCount
       var remainder = available mod growCount
       for childInfo in growChildren:
@@ -194,7 +209,7 @@ proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
 
     let growCount = growChildren.len
     if growCount > 0:
-      let available = max(w.box.h - fixedHeight, 0)
+      let available = max(w.box.h - fixedHeight - gapTotal, 0)
       let share = available div growCount
       var remainder = available mod growCount
       for childInfo in growChildren:
@@ -236,6 +251,10 @@ proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
     cursorX = w.box.x + (if w.dir == Row: mainOffset else: 0)
     cursorY = w.box.y + (if w.dir == Col: mainOffset else: 0)
 
+  let gap = w.style.gap
+  let childCount = w.children.len
+  var childIndexCounter = 0
+
   for child in ui.items(widgetIndex):
     let childIndex = child
     let childSize = ui.get(childIndex).size
@@ -255,8 +274,14 @@ proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
 
     if w.dir == Row:
       cursorX += ui.get(childIndex).box.w
+      if childIndexCounter < childCount - 1:
+        cursorX += gap
     else:
       cursorY += ui.get(childIndex).box.h
+      if childIndexCounter < childCount - 1:
+        cursorY += gap
+
+    inc childIndexCounter
 
     case w.crossAlign
     of Center:

@@ -37,13 +37,13 @@ when isMainModule:
     size = (w: Sizing(kind: Grow), h: Sizing(kind: Grow))
     style = Style(bg: color(0.3, 0.3, 0.3, 1.0))
     dir = Col
-    align = End
+    align = Center
     crossAlign = Center
     widget:
       size = (w: Sizing(kind: Grow), h: Sizing(kind: Fixed, min: 64, max: 64))
       style = Style(bg: color(0.0, 0.0, 0.3, 1.0))
       dir = Row
-      align = End
+      align = Center
       crossAlign = Center
       widget:
         text = "Hello"
