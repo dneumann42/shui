@@ -25,7 +25,7 @@ type
   Style* = object
     bg*, fg*, border*: Color
     bordered* = false
-    padding* = 8
+    padding* = 0
     gap* = 8
 
   Align* = enum
@@ -122,11 +122,12 @@ proc getDimensions*(
 
 proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
   let w = ui.get(widgetIndex)
+  let padding = w.style.padding * 2
 
   if w.text.len > 0:
     let (tw, th) = ui.measureText(w.text)
-    ui.get(widgetIndex).box.w += tw
-    ui.get(widgetIndex).box.h += th
+    ui.get(widgetIndex).box.w = tw + padding
+    ui.get(widgetIndex).box.h = th + padding
     return
 
   let (totalWidth, totalHeight, maxWidth, maxHeight) = ui.getDimensions(widgetIndex)
@@ -141,6 +142,9 @@ proc updateDimensions*(ui: var UI, widgetIndex: WidgetIndex) =
       ui.get(widgetIndex).box.w = max(w.size.w.min, maxWidth)
     if w.size.h.kind == Fit:
       ui.get(widgetIndex).box.h = max(w.size.h.min, totalHeight)
+
+  ui.get(widgetIndex).box.w += padding
+  ui.get(widgetIndex).box.h += padding
 
   let sizing = ui.get(widgetIndex).size
   if sizing.w.min > 0:
@@ -162,6 +166,7 @@ proc clampDimension(value: int, sizing: Sizing): int =
 proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
   let w = ui.get(widgetIndex)
   let gap = w.style.gap
+  let padding = w.style.padding * 2
   let childCount = w.children.len
   let gapTotal = gap * max(childCount - 1, 0)
 
@@ -179,7 +184,7 @@ proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
 
     let growCount = growChildren.len
     if growCount > 0:
-      let available = max(w.box.w - fixedWidth - gapTotal, 0)
+      let available = max(w.box.w - padding - fixedWidth - gapTotal, 0)
       let share = available div growCount
       var remainder = available mod growCount
       for childInfo in growChildren:
@@ -209,7 +214,7 @@ proc updateGrowContainer*(ui: var UI, widgetIndex: WidgetIndex) =
 
     let growCount = growChildren.len
     if growCount > 0:
-      let available = max(w.box.h - fixedHeight - gapTotal, 0)
+      let available = max(w.box.h - padding - fixedHeight - gapTotal, 0)
       let share = available div growCount
       var remainder = available mod growCount
       for childInfo in growChildren:
@@ -234,22 +239,28 @@ proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
   let w = ui.get(widgetIndex)
 
   let (width, height, _, _) = ui.getDimensions(widgetIndex)
+  let paddingVal = w.style.padding
+  let doublePad = paddingVal * 2
+  let contentStartX = w.box.x + paddingVal
+  let contentStartY = w.box.y + paddingVal
+  let contentWidth = max(w.box.w - doublePad, 0)
+  let contentHeight = max(w.box.h - doublePad, 0)
 
   var mainOffset = 0
   if w.align == Center:
     if w.dir == Row:
-      mainOffset = max((w.box.w - width) div 2, 0)
+      mainOffset = max((contentWidth - width) div 2, 0)
     else:
-      mainOffset = max((w.box.h - height) div 2, 0)
+      mainOffset = max((contentHeight - height) div 2, 0)
   elif w.align == End:
     if w.dir == Row:
-      mainOffset = max(w.box.w - width, 0)
+      mainOffset = max(contentWidth - width, 0)
     else:
-      mainOffset = max(w.box.h - height, 0)
+      mainOffset = max(contentHeight - height, 0)
 
   var
-    cursorX = w.box.x + (if w.dir == Row: mainOffset else: 0)
-    cursorY = w.box.y + (if w.dir == Col: mainOffset else: 0)
+    cursorX = contentStartX + (if w.dir == Row: mainOffset else: 0)
+    cursorY = contentStartY + (if w.dir == Col: mainOffset else: 0)
 
   let gap = w.style.gap
   let childCount = w.children.len
@@ -260,15 +271,15 @@ proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
     let childSize = ui.get(childIndex).size
     if w.dir == Row:
       ui.get(childIndex).box.x = cursorX
-      ui.get(childIndex).box.y = w.box.y
+      ui.get(childIndex).box.y = contentStartY
     else:
-      ui.get(childIndex).box.x = w.box.x
+      ui.get(childIndex).box.x = contentStartX
       ui.get(childIndex).box.y = cursorY
 
     if w.dir == Col and childSize.w.kind == Grow:
-      ui.get(childIndex).box.w = clampDimension(w.box.w, childSize.w)
+      ui.get(childIndex).box.w = clampDimension(contentWidth, childSize.w)
     if w.dir == Row and childSize.h.kind == Grow:
-      ui.get(childIndex).box.h = clampDimension(w.box.h, childSize.h)
+      ui.get(childIndex).box.h = clampDimension(contentHeight, childSize.h)
 
     ui.updateLayout(childIndex)
 
@@ -287,22 +298,22 @@ proc updateLayout*(ui: var UI, widgetIndex: WidgetIndex) =
     of Center:
       if w.dir == Row:
         ui.get(childIndex).box.y =
-          w.box.y + max((w.box.h - ui.get(childIndex).box.h) div 2, 0)
+          contentStartY + max((contentHeight - ui.get(childIndex).box.h) div 2, 0)
       else:
         ui.get(childIndex).box.x =
-          w.box.x + max((w.box.w - ui.get(childIndex).box.w) div 2, 0)
+          contentStartX + max((contentWidth - ui.get(childIndex).box.w) div 2, 0)
     of End:
       if w.dir == Row:
         ui.get(childIndex).box.y =
-          w.box.y + max(w.box.h - ui.get(childIndex).box.h, 0)
+          contentStartY + max(contentHeight - ui.get(childIndex).box.h, 0)
       else:
         ui.get(childIndex).box.x =
-          w.box.x + max(w.box.w - ui.get(childIndex).box.w, 0)
+          contentStartX + max(contentWidth - ui.get(childIndex).box.w, 0)
     else:
       if w.dir == Row:
-        ui.get(childIndex).box.y = w.box.y
+        ui.get(childIndex).box.y = contentStartY
       else:
-        ui.get(childIndex).box.x = w.box.x
+        ui.get(childIndex).box.x = contentStartX
 
 proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
   ui.get(ui.root).box = container
@@ -355,7 +366,8 @@ proc draw*(ui: var UI) =
 
 proc writeLayout*(ui: UI, path: string) =
   var file = open(path, fmWrite)
-  defer: file.close()
+  defer:
+    file.close()
 
   proc findParent(child: WidgetIndex): int =
     for idx, widget in ui.widgets:
@@ -368,26 +380,10 @@ proc writeLayout*(ui: UI, path: string) =
   for idx, widget in ui.widgets:
     let parent = findParent(WidgetIndex(idx))
     let line =
-      "widget " &
-      $idx &
-      " parent " &
-      $parent &
-      " dir " &
-      $widget.dir &
-      " align " &
-      $widget.align &
-      " crossAlign " &
-      $widget.crossAlign &
-      " box(" &
-      $widget.box.x &
-      "," &
-      $widget.box.y &
-      "," &
-      $widget.box.w &
-      "," &
-      $widget.box.h &
-      ")" &
-      " text \"" &
-      widget.text &
-      "\""
+      "widget " & $idx & " parent " & $parent & " dir " & $widget.dir & " align " &
+      $widget.align & " crossAlign " & $widget.crossAlign & " box(" & $widget.box.x & "," &
+      $widget.box.y & "," & $widget.box.w & "," & $widget.box.h & ")" & " sizeW(" &
+      $widget.size.w.kind & "," & $widget.size.w.min & "," & $widget.size.w.max & ")" &
+      " sizeH(" & $widget.size.h.kind & "," & $widget.size.h.min & "," &
+      $widget.size.h.max & ")" & " text \"" & widget.text & "\""
     file.writeLine(line)

@@ -25,9 +25,11 @@ when isMainModule:
     )
     if w.text.len > 0:
       ctx.fillStyle = w.style.fg
-      # NOTE: need to add the height of the line to the 'y',
-      # since the text origin is at the bottom of the line.
-      ctx.fillText(w.text, w.box.x.toFloat, w.box.y.toFloat + 12)
+      let padding = w.style.padding.toFloat
+      let textX = w.box.x.toFloat + padding
+      # Baseline sits above the bottom padding so the glyphs respect padding.
+      let baseline = w.box.y.toFloat + w.box.h.toFloat - padding
+      ctx.fillText(w.text, textX, baseline)
 
   ui.onMeasureText = proc(text: string): tuple[w, h: int] =
     let metrics = ctx.measureText(text)
