@@ -26,6 +26,7 @@ type
     bg*, fg*, border*: Color
     padding* = 0
     gap* = 8
+    borderRadius* = 0.0
 
   Align* = enum
     Start

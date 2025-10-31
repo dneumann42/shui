@@ -18,27 +18,44 @@ when isMainModule:
   ui.onDraw = proc(w: Widget) =
     ctx.beginPath()
     ctx.fillStyle = w.style.bg
-    ctx.fillRect(
-      rect(
-        vec2(w.box.x.toFloat, w.box.y.toFloat), #
-        vec2(w.box.w.toFloat, w.box.h.toFloat),
-      )
-    )
-    if w.border > 0:
-      ctx.strokeStyle = w.style.border
-      ctx.lineWidth = w.border.toFloat
-      ctx.strokeRect(
+    if w.style.borderRadius == 0.0:
+      ctx.fillRect(
         rect(
           vec2(w.box.x.toFloat, w.box.y.toFloat), #
           vec2(w.box.w.toFloat, w.box.h.toFloat),
         )
       )
+    else:
+      ctx.fillRoundedRect(
+        rect(
+          vec2(w.box.x.toFloat, w.box.y.toFloat), #
+          vec2(w.box.w.toFloat, w.box.h.toFloat),
+        ),
+        w.style.borderRadius.float32,
+      )
+    if w.border > 0:
+      ctx.strokeStyle = w.style.border
+      ctx.lineWidth = w.border.toFloat
+      if w.style.borderRadius == 0.0:
+        ctx.strokeRect(
+          rect(
+            vec2(w.box.x.toFloat, w.box.y.toFloat), #
+            vec2(w.box.w.toFloat, w.box.h.toFloat),
+          )
+        )
+      else:
+        ctx.strokeRoundedRect(
+          rect(
+            vec2(w.box.x.toFloat, w.box.y.toFloat), #
+            vec2(w.box.w.toFloat, w.box.h.toFloat),
+          ),
+          w.style.borderRadius,
+        )
 
     if w.text.len > 0:
       ctx.fillStyle = w.style.fg
       let padding = w.style.padding.toFloat
       let textX = w.box.x.toFloat + padding
-      # Baseline sits above the bottom padding so the glyphs respect padding.
       let baseline = w.box.y.toFloat + w.box.h.toFloat - padding
       ctx.fillText(w.text, textX, baseline)
 
@@ -61,7 +78,10 @@ when isMainModule:
       widget:
         text = "Hello"
         style = Style(
-          fg: color(1.0, 1.0, 1.0, 1.0), border: color(1.0, 1.0, 1.0, 1.0), padding: 8
+          fg: color(1.0, 1.0, 1.0, 1.0),
+          border: color(1.0, 1.0, 1.0, 1.0),
+          padding: 32,
+          borderRadius: 8.0,
         )
         border = 2
       widget:
