@@ -1,7 +1,7 @@
 # import std/hashes
 
-import chroma, macros
-export chroma, macros
+import macros
+export macros
 
 type
   SizingKind* = enum
@@ -21,6 +21,8 @@ type
   Direction* = enum
     Row
     Col
+
+  Color* = tuple[r, g, b, a: float32]
 
   Style* = object
     bg*, fg*, border*: Color
@@ -54,11 +56,21 @@ type
     drawElem: proc(elem: Elem): void
     measureText: proc(text: string): tuple[w, h: int]
 
+proc init*(T: typedesc[UI]): T =
+  T.default()
+
+proc color*(r, g, b, a: SomeFloat): Color =
+  result = (r: r.float32, g: g.float32, b: b.float32, a: a.float32)
+
 proc `onDraw=`*(ui: var UI, fn: proc(elem: Elem): void) =
   ui.drawElem = fn
 
 proc `onMeasureText=`*(ui: var UI, fn: proc(text: string): tuple[w, h: int]) =
   ui.measureText = fn
+
+proc reset*(ui: var UI) =
+  ui.root = ElemIndex(-1)
+  ui.elems.setLen(0)
 
 proc hasDraw*(ui: var UI): bool =
   ui.drawElem.isNil == false
@@ -119,15 +131,24 @@ proc getDimensions*(ui: var UI, elemIndex: ElemIndex): tuple[w, h, maxW, maxH: i
     else:
       result.h += totalGap
 
-proc updateDimensions*(ui: var UI, elemIndex: ElemIndex) =
+proc updateDimensions*(ui: var UI, elemIndex: ElemIndex) {.gcsafe.} =
   let w = ui.get(elemIndex)
   let padding = w.style.padding * 2
 
   if w.text.len > 0:
-    let (tw, th) = ui.measureText(w.text)
-    ui.get(elemIndex).box.w = tw + padding
-    ui.get(elemIndex).box.h = th + padding
-    return
+    # NOTE: I need to think of a way to remove the cast
+    # the reason its needed is because of the callback ui.measureText
+    # because I only pass it text, it needs access to some font
+    # that would be captured in the closures environment... which isn't ideal
+    # I should add a generic parameter to UI so I can give it the font
+    {.cast(gcsafe).}:
+      if ui.measureText.isNil:
+        ui.measureText = proc(txt: string): auto =
+          (w: txt.len, h: 1)
+      let (tw, th) = ui.measureText(w.text)
+      ui.get(elemIndex).box.w = tw + padding
+      ui.get(elemIndex).box.h = th + padding
+      return
 
   let (totalWidth, totalHeight, maxWidth, maxHeight) = ui.getDimensions(elemIndex)
 
@@ -324,7 +345,7 @@ proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
   ui.updateGrowContainer(ui.root)
   ui.updateLayout(ui.root)
 
-proc endElem*(ui: var UI, parent, elemIndex: ElemIndex) =
+proc endElem*(ui: var UI, parent, elemIndex: ElemIndex) {.gcsafe.} =
   if parent.int != -1:
     ui.add(parent, elemIndex)
   ui.updateDimensions(elemIndex)
@@ -348,6 +369,11 @@ macro elem*(blk: untyped) =
       let elemIndex {.inject.} = ui.beginElem(Elem(), parent)
       `newBlk`
       ui.endElem(parent, elemIndex)
+
+template layout*(container: tuple[x, y, w, h: int], blk: untyped) =
+  ui.reset()
+  blk
+  ui.updateLayout(container)
 
 proc draw*(ui: var UI, elem: Elem) =
   if ui.hasDraw():
