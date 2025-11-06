@@ -52,7 +52,7 @@ type
 
   UI* = object
     root = ElemIndex(-1)
-    elems: seq[Elem]
+    elems*: seq[Elem]
     drawElem: proc(elem: Elem): void
     measureText: proc(text: string): tuple[w, h: int]
 
@@ -336,6 +336,8 @@ proc updateLayout*(ui: var UI, elemIndex: ElemIndex) =
         ui.get(childIndex).box.x = contentStartX
 
 proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
+  if ui.elems.len == 0:
+    return
   ui.get(ui.root).box = container
   ui.get(ui.root).size = (
     #
@@ -385,6 +387,8 @@ proc draw*(ui: var UI, elemIndex: ElemIndex) =
     ui.draw(elem)
 
 proc draw*(ui: var UI) =
+  if ui.elems.len == 0:
+    return
   ui.draw(ui.get(ui.root))
   for elem in ui:
     ui.draw(elem)
@@ -395,11 +399,11 @@ proc writeLayout*(ui: UI, path: string) =
     file.close()
 
   proc findParent(child: ElemIndex): int =
+    result = -1
     for idx, elem in ui.elems:
       for c in elem.children:
         if int(c) == int(child):
           return idx
-    return -1
 
   file.writeLine("index parent dir align crossAlign x y w h text")
   for idx, elem in ui.elems:
