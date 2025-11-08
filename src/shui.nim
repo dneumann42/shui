@@ -81,10 +81,10 @@ when isMainModule:
         button("Click me!"):
           discard
         elem:
-          text = "World"
+          text = "Hello"
           style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
         elem:
-          text = "Test"
+          text = "Test!"
           style = Style(fg: color(1.0, 1.0, 1.0, 1.0))
 
   ui.draw()

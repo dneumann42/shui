@@ -9,7 +9,7 @@ import unittest
 import shui/elements
 
 test "elem macro builds children":
-  var ui = UI()
+  var ui = UI.init()
   ui.onMeasureText = proc(text: string): tuple[w, h: int] =
     (w: 10, h: 12)
   elem:
@@ -28,3 +28,10 @@ test "elem macro builds children":
   ui.updateLayout((0, 0, 100, 100))
   check ui.get(ElemIndex(1)).text == "Hello, World"
   check ui.get(ElemIndex(2)).text == "Hello, World"
+
+test "Getting by id":
+  var ui = UI.init()
+  elem:
+    id = "Hello, World"
+  var e = ui.mget("Hello, World")
+  check e.id == "Hello, World"

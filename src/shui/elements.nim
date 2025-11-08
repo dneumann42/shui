@@ -1,4 +1,4 @@
-# import std/hashes
+import std/[oids, sets, hashes, tables]
 
 import macros
 export macros
@@ -35,7 +35,15 @@ type
     Center
     End
 
+  ElemId* = distinct string
+
+  AbstractWidgetState* = ref object of RootObj
+  WidgetState*[T] = ref object of AbstractWidgetState
+    when T isnot void:
+      state*: T
+
   Elem* = object
+    id: ElemId
     size*: tuple[w, h: Sizing]
     state*: ElemState
     text*: string
@@ -53,11 +61,67 @@ type
   UI* = object
     root = ElemIndex(-1)
     elems*: seq[Elem]
+    actionElements*: Table[ElemId, tuple[x, y, w, h: int]]
     drawElem: proc(elem: Elem): void
     measureText: proc(text: string): tuple[w, h: int]
+    widgetState: Table[ElemId, AbstractWidgetState]
+
+    actionPressed*: bool
+    actionDown*: bool
+    mousePosition*: tuple[x, y: int]
+
+    widgetStack*: seq[ElemId]
 
 proc init*(T: typedesc[UI]): T =
   T.default()
+
+proc id*(e: Elem): ElemId =
+  e.id
+
+proc setState*[T](ui: var UI, eid: ElemId, state: T) =
+  ui.widgetState[eid] = AbstractWidgetState(WidgetState[T](state: state))
+
+proc getState*[T](ui: var UI, eid: ElemId, Ty: typedesc[T]): Ty =
+  result = cast[WidgetState[Ty]](ui.widgetState[eid])
+
+proc `==`*(a, b: ElemId): bool {.borrow.}
+proc hash*(a: ElemId): Hash =
+  a.string.hash()
+
+proc `$`*(a: ElemId): string =
+  a.string
+
+proc mget*(ui: UI, elemId: ElemId): lent Elem =
+  for i in 0 ..< ui.elems.len:
+    if ui.elems[i].id == elemId:
+      return ui.elems[i]
+  raise newException(ValueError, "Failed to find element of ID: " & $elemId)
+
+proc get*(ui: UI, elemId: ElemId): Elem =
+  for i in 0 ..< ui.elems.len:
+    if ui.elems[i].id == elemId:
+      return ui.elems[i]
+  raise newException(ValueError, "Failed to find element of ID: " & $elemId)
+
+proc widget*(ui: var UI, eid: ElemId) =
+  ui.widgetStack.add(eid)
+
+proc hot*(eid: ElemId, ui: UI): bool =
+  if not ui.actionElements.contains(eid):
+    return false
+  let (x, y, w, h) = ui.actionElements[eid]
+  let (mx, my) = ui.mousePosition
+  result = mx > x and mx < x + w and my > y and my < y + h
+
+proc pressed*(eid: ElemId, ui: var UI): bool =
+  if not ui.actionElements.contains(eid):
+    return false
+  result = eid.hot(ui) and ui.actionPressed
+
+proc down*(eid: ElemId, ui: var UI): bool =
+  if not ui.actionElements.contains(eid):
+    return false
+  result = eid.hot(ui) and ui.actionDown
 
 proc color*(r, g, b, a: SomeFloat): Color =
   result = (r: r.float32, g: g.float32, b: b.float32, a: a.float32)
@@ -68,7 +132,14 @@ proc `onDraw=`*(ui: var UI, fn: proc(elem: Elem): void) =
 proc `onMeasureText=`*(ui: var UI, fn: proc(text: string): tuple[w, h: int]) =
   ui.measureText = fn
 
-proc reset*(ui: var UI) =
+proc begin*(ui: var UI) =
+  for i in 0 ..< ui.elems.len:
+    for eid in ui.widgetStack:
+      if ui.elems[i].id != eid:
+        continue
+      ui.actionElements[eid] = ui.elems[i].box
+
+  ui.widgetStack.setLen(0)
   ui.root = ElemIndex(-1)
   ui.elems.setLen(0)
 
@@ -96,7 +167,7 @@ iterator items*(ui: var UI): ElemIndex =
     yield child
 
 proc createElem*(ui: var UI): ElemIndex =
-  ui.elems.add(Elem())
+  ui.elems.add(Elem(id: ElemId($genOid())))
   result = ElemIndex(ui.elems.len - 1)
 
 proc beginElem*(ui: var UI, elem: Elem, parent = ElemIndex(-1)): ElemIndex =
@@ -301,19 +372,6 @@ proc updateLayout*(ui: var UI, elemIndex: ElemIndex) =
     if w.dir == Row and childSize.h.kind == Grow:
       ui.get(childIndex).box.h = clampDimension(contentHeight, childSize.h)
 
-    ui.updateLayout(childIndex)
-
-    if w.dir == Row:
-      cursorX += ui.get(childIndex).box.w
-      if childIndexCounter < childCount - 1:
-        cursorX += gap
-    else:
-      cursorY += ui.get(childIndex).box.h
-      if childIndexCounter < childCount - 1:
-        cursorY += gap
-
-    inc childIndexCounter
-
     case w.crossAlign
     of Center:
       if w.dir == Row:
@@ -334,6 +392,19 @@ proc updateLayout*(ui: var UI, elemIndex: ElemIndex) =
         ui.get(childIndex).box.y = contentStartY
       else:
         ui.get(childIndex).box.x = contentStartX
+
+    ui.updateLayout(childIndex)
+
+    if w.dir == Row:
+      cursorX += ui.get(childIndex).box.w
+      if childIndexCounter < childCount - 1:
+        cursorX += gap
+    else:
+      cursorY += ui.get(childIndex).box.h
+      if childIndexCounter < childCount - 1:
+        cursorY += gap
+
+    inc childIndexCounter
 
 proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
   if ui.elems.len == 0:
@@ -372,10 +443,14 @@ macro elem*(blk: untyped) =
       `newBlk`
       ui.endElem(parent, elemIndex)
 
+proc updateActiveElements*(ui: var UI) =
+  discard
+
 template layout*(container: tuple[x, y, w, h: int], blk: untyped) =
   ui.reset()
   blk
   ui.updateLayout(container)
+  ui.updateActiveElements()
 
 proc draw*(ui: var UI, elem: Elem) =
   if ui.hasDraw():
