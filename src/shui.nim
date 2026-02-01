@@ -52,15 +52,47 @@ proc layout*(widget: Widget, parentBox: UiBox) =
         child.gridItem.span[drow] = (i + 1).int16 .. (i + 2).int16
 
     # Compute layout using cssgrid
+    let containerPos = (x: contentBox.x, y: contentBox.y)  # Save position
     computeLayout(container)
+    # Restore position (computeLayout sets it to -inf)
+    container.box.x = containerPos.x
+    container.box.y = containerPos.y
 
-    # Recursively layout child containers
+    # Manual centering workaround
+    # cssgrid's justifyItems/alignItems only control item positioning within cells,
+    # not track distribution. We need to manually center the group of children.
+    if container.justify == Center and container.children.len > 0:
+      if container.direction == Vertical:
+        # Center children vertically as a group
+        var totalHeight: UiScalar = 0
+        for child in container.children:
+          totalHeight += child.box.h
+        let centerOffset = (contentBox.h - totalHeight) / 2
+        for child in container.children:
+          child.box.y = child.box.y + centerOffset
+      else:
+        # Center children horizontally as a group
+        var totalWidth: UiScalar = 0
+        for child in container.children:
+          totalWidth += child.box.w
+        let centerOffset = (contentBox.w - totalWidth) / 2
+        for child in container.children:
+          child.box.x = child.box.x + centerOffset
+
+    # Recursively layout children (containers and components)
     for child in container.children:
-      if child of Container:
-        layout(child, child.box)
+      # Offset child position by container position (grid positions are relative)
+      child.box.x = child.box.x + container.box.x
+      child.box.y = child.box.y + container.box.y
+      layout(child, child.box)
   else:
-    # Leaf widget - box already computed by parent
+    # Widget (possibly a component with children)
     widget.box = parentBox
+
+    # If this widget has children (e.g., component with ui block), layout them
+    if widget.children.len > 0:
+      for child in widget.children:
+        layout(child, widget.box)
 
 proc renderTree*(widget: Widget) =
   ## Render widget tree depth-first

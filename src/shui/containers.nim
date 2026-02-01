@@ -13,22 +13,28 @@ type
 
 proc Row*(justify: Justify = Start, align: Align = Stretch): Container =
   ## Create a horizontal container (children flow left to right)
+  # When centering, use Fit (size to content) instead of Fill
+  # This allows parent containers to properly center this container
+  let sizing = if justify == Center or align == Center: Fit else: Fill
   result = Container(
     direction: Horizontal,
     justify: justify,
     align: align,
-    sizing: Fill,
+    sizing: sizing,
     growFactor: 1.0,
     gridTemplate: newGridTemplate()
   )
 
 proc Column*(justify: Justify = Start, align: Align = Stretch): Container =
   ## Create a vertical container (children flow top to bottom)
+  # When centering, use Fit (size to content) instead of Fill
+  # This allows parent containers to properly center this container
+  let sizing = if justify == Center or align == Center: Fit else: Fill
   result = Container(
     direction: Vertical,
     justify: justify,
     align: align,
-    sizing: Fill,
+    sizing: sizing,
     growFactor: 1.0,
     gridTemplate: newGridTemplate()
   )
@@ -107,5 +113,9 @@ proc setupGridTemplate*(container: Container) =
   gt.gaps[drow] = container.gap.float.UiScalar
 
   # Apply alignment
-  gt.justifyItems = mapJustify(container.justify)
-  gt.alignItems = mapAlign(container.align)
+  # In CSS Grid, axes are always:
+  # - justifyItems controls horizontal alignment (inline axis)
+  # - alignItems controls vertical alignment (block axis)
+  # NOTE: We handle Center manually in layout, so don't pass it to grid
+  gt.justifyItems = if container.justify == Center: CxStart else: mapJustify(container.justify)
+  gt.alignItems = if container.align == Center: CxStart else: mapAlign(container.align)

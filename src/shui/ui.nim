@@ -105,6 +105,7 @@ macro component*(id, blk): untyped =
 
   var ctor: NimNode = nil
   var drawProc: NimNode = nil
+  var measureProc: NimNode = nil
   var uiBlock: NimNode = nil
   var hasInit = false
 
@@ -125,6 +126,8 @@ macro component*(id, blk): untyped =
       discard
     elif stmt.kind == nnkProcDef and stmt[0].repr == "draw":
       drawProc = stmt
+    elif stmt.kind == nnkProcDef and stmt[0].repr == "measure":
+      measureProc = stmt
     else:
       error("Unexpected statement in component:\n" & stmt.treeRepr)
 
@@ -246,6 +249,43 @@ macro component*(id, blk): untyped =
               ),
               drawBody
             )
+          )
+        )
+      )
+
+    # Add measure call if measure method exists
+    if not measureProc.isNil:
+      let measureBody = measureProc[6]  # Get the measure body
+      # Extract state for use in measure (if not already extracted for ui block)
+      if uiBlock.isNil:
+        constructorBody.add(
+          nnkLetSection.newTree(
+            nnkIdentDefs.newTree(
+              ident("state"),
+              newEmptyNode(),
+              nnkDotExpr.newTree(
+                nnkCall.newTree(
+                  nnkBracketExpr.newTree(ident("ComponentState"), stateTypeName),
+                  nnkDotExpr.newTree(ident("result"), ident("abstractState"))
+                ),
+                ident("state")
+              )
+            )
+          )
+        )
+      # Create a block with self = result for the measure body
+      constructorBody.add(
+        nnkBlockStmt.newTree(
+          newEmptyNode(),
+          nnkStmtList.newTree(
+            nnkLetSection.newTree(
+              nnkIdentDefs.newTree(
+                ident("self"),
+                newEmptyNode(),
+                ident("result")
+              )
+            ),
+            measureBody
           )
         )
       )
