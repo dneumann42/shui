@@ -1,5 +1,6 @@
 import cssgrid
 import cssgrid/[gridtypes, constraints, layout, parser, numberTypes]
+export cssgrid
 
 type
   Sizing* = enum

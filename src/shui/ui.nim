@@ -19,10 +19,14 @@ proc getPainterType(): NimNode =
     result = ident("RootObj")
 
 type
-  Component*[T: tuple, E, P] = ref object of Widget
+  AbstractComponentState = ref object of RootObj
+  ComponentState*[T] = ref object of AbstractComponentState
     state*: T
-    when E isnot void:
-      update*: proc(self: var T, event: E): void
+  Component* = ref object of Widget
+    abstractState*: AbstractComponentState
+
+method draw*(self: Component) {.base.} =
+  discard
 
 proc childStmts*(blk: NimNode): NimNode =
   result = nnkStmtList.newTree()
@@ -67,6 +71,22 @@ macro row*(params: varargs[untyped]): untyped =
 macro column*(params: varargs[untyped]): untyped =
   buildContainerMacro("Column", params)
 
+macro renderWidget*(widget, painter: typed): untyped =
+  ## Recursively render a widget tree with the given painter
+  ## Automatically calls draw() on all components and descends into containers
+  result = quote do:
+    proc renderImpl(w: Widget, p: auto) =
+      # Try to call draw if it exists (for components)
+      when compiles(w.draw(p)):
+        w.draw(p)
+
+      # Recurse into containers
+      if w of Container:
+        for child in Container(w).children:
+          renderImpl(child, p)
+
+    renderImpl(`widget`, `painter`)
+
 macro component*(id, blk): untyped =
   expectKind(blk, nnkStmtList)
   let componentName = id
@@ -102,7 +122,8 @@ macro component*(id, blk): untyped =
   # Generate Component type (without events for now)
   let painterType = getPainterType()
   result.add(quote do:
-    type `componentName`* = ref object of Component[`stateTypeName`, void, `painterType`]
+    type `componentName`* = ref object of Component
+      painter: `painterType`
   )
 
   # Generate lowercase constructor from init proc
@@ -111,6 +132,11 @@ macro component*(id, blk): untyped =
     let initBody = ctor[6]    # Init body
 
     # Build constructor proc with same params as init
+    let abstractState = quote do:
+      AbstractComponentState(ComponentState[`stateTypeName`](
+        state: 
+          block: 
+            `initBody`))
     let constructor = nnkProcDef.newTree(
       nnkPostfix.newTree(ident("*"), constructorName),
       newEmptyNode(),
@@ -121,85 +147,19 @@ macro component*(id, blk): untyped =
       nnkStmtList.newTree(
         nnkCall.newTree(ident("new"), ident("result")),
         nnkAsgn.newTree(
-          nnkDotExpr.newTree(ident("result"), ident("state")),
-          initBody
+          nnkDotExpr.newTree(ident("result"), ident("abstractState")),
+          abstractState
         )
       )
     )
+    echo constructor.repr
     result.add(constructor)
   else:
     error("Component must have an init proc", blk)
 
   # Add draw method if present
   if not drawProc.isNil:
-    let painterType = getPainterType()
-    let drawBody = drawProc[6]
-    let selfParam = drawProc[3][1][0]  # First param name
-    let painterParam = drawProc[3][2][0]  # Second param name
+    let body = drawProc[6]
+    result.add(quote do:
+      method draw* (self: `componentName`) = `body`)
 
-    # Build the proc manually to avoid type checking in wrong context
-    let drawProcDef = nnkProcDef.newTree(
-      nnkPostfix.newTree(ident("*"), ident("draw")),
-      newEmptyNode(),
-      newEmptyNode(),
-      nnkFormalParams.newTree(
-        newEmptyNode(),  # No return type
-        nnkIdentDefs.newTree(ident("component"), componentName, newEmptyNode()),
-        nnkIdentDefs.newTree(painterParam, painterType, newEmptyNode())
-      ),
-      newEmptyNode(),
-      newEmptyNode(),
-      nnkStmtList.newTree(
-        nnkLetSection.newTree(
-          nnkIdentDefs.newTree(
-            selfParam,
-            newEmptyNode(),
-            nnkDotExpr.newTree(ident("component"), ident("state"))
-          )
-        ),
-        drawBody
-      )
-    )
-    result.add(drawProcDef)
-
-# Label component moved to user code (corpotocracy.nim)
-# 
-# component Button:
-#   state: 
-#     tuple[title: string, onPress: proc(): void]
-#   event:
-#     Pressed
-#   ui:
-#     box:
-#       label(state.title)
-# 
-#   proc init(title: string, onPress: proc(): void): ButtonState =
-#     (title: title, onPress: onPress)
-# 
-#   proc update(self: var ButtonState, event: ButtonEvent) =
-#     case event
-#     of Pressed:
-#       self.onPress()
-# 
-# component Counter:
-#   state: tuple[count: int]
-# 
-#   event:
-#     Increment
-#     Decrement
-#     Reset
-# 
-#   proc init(): CounterState =
-#     (count: 1)
-# 
-#   proc update(self: var CounterState, event: CounterEvent) =
-#     discard
-# 
-#   proc ui(self: CounterState) =
-#     box:
-#       button("Decrement") do():
-#         emit(Decrement)
-#       label($self.count)
-#       button("Increment") do():
-#         emit(Increment)
-# 
