@@ -12,3 +12,8 @@ srcDir        = "src"
 requires "nim >= 2.2.6"
 requires "chroma"
 requires "sigils"
+
+# Tasks
+
+task test, "Run widget macro tests":
+  exec "nim c -r tests/twidgets.nim"
