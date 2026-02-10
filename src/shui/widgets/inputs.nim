@@ -16,7 +16,7 @@ proc extractConfig*(node: NimNode): LineInputConfig =
 macro lineInput*(text: var string, id: ElemId, blk: untyped) =
   let config = extractConfig(blk)
   quote:
-    ui.widget(`id`)
+    ui.registerWidget(`id`)
     let focused = `id`.focused(ui)
     let config = `config`
     if focused:
@@ -85,7 +85,7 @@ macro comboBox*(value {.inject.}: var string, id {.inject.}: ElemId, blk: untype
     let config = ComboBoxConfig()
     let focused = `id`.focused(ui)
     
-    ui.widget(`id`)
+    ui.registerWidget(`id`)
 
     if focused:
       if `id`.pressed(ui) or ui.input.enterPressed or ui.input.tabPressed:
@@ -164,7 +164,7 @@ macro keyValueOption*(key, descr: string) =
     if key.pressed(ui):
       value = `key`
       comboBoxId.unfocus(ui)
-    ui.widget(key)
+    ui.registerWidget(key)
     block:
       var bgCol =
         if key.hot(ui):

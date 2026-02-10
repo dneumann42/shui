@@ -26,6 +26,7 @@ type
     padding* = 0
     gap* = 8
     borderRadius* = 0.0
+    rotation* = 0.0  # Rotation in radians
 
   Align* = enum
     Start
@@ -104,8 +105,27 @@ type
     blinkTicker*: int
     hotElemId*: Option[ElemId]
 
+    # Parent stack for preserving element hierarchy across proc calls
+    parentStack: seq[ElemIndex]
+
 proc init*(T: typedesc[UI]): T =
   T.default()
+
+proc pushParent*(ui: var UI, parent: ElemIndex) =
+  ## Push a parent element onto the stack
+  ui.parentStack.add(parent)
+
+proc popParent*(ui: var UI) =
+  ## Pop the top parent element from the stack
+  if ui.parentStack.len > 0:
+    discard ui.parentStack.pop()
+
+proc currentParent*(ui: UI): ElemIndex =
+  ## Get the current parent from the stack, or -1 if none
+  if ui.parentStack.len > 0:
+    result = ui.parentStack[^1]
+  else:
+    result = ElemIndex(-1)
 
 proc id*(e: Elem): ElemId =
   e.id
@@ -162,7 +182,7 @@ proc get*(ui: UI, elemId: ElemId): Elem =
       return ui.elems[i]
   raise newException(ValueError, "Failed to find element of ID: " & $elemId)
 
-proc widget*(ui: var UI, eid: ElemId) =
+proc registerWidget*(ui: var UI, eid: ElemId) =
   if ui.widgets.contains(eid):
     return
   ui.widgets[eid] = Widget()
@@ -205,20 +225,22 @@ proc color*(v: SomeFloat): Color =
   result = Color(r: v, g: v, b: v, a: 1.0)
 
 proc style*(
-  bg = color(0.0), 
-  fg = color(0.0), 
+  bg = color(0.0),
+  fg = color(0.0),
   borderColor = color(0.0),
   border = 0,
   padding = 0,
   gap = 8,
-  borderRadius = 0.0
+  borderRadius = 0.0,
+  rotation = 0.0
 ): Style =
   result = Style(
     bg: bg, fg: fg, borderColor: borderColor,
     border: border,
     padding: padding,
     gap: gap,
-    borderRadius: borderRadius
+    borderRadius: borderRadius,
+    rotation: rotation
   )
 
 proc `onDraw=`*(ui: var UI, fn: DrawElemProc) =
@@ -601,22 +623,31 @@ proc updateElem(blk: NimNode): auto =
       let call = nnkCall.newTree(dot, newIdentNode("elemIndex"))
       blk[i] = nnkAsgn.newTree(nnkDotExpr.newTree(call, blk[i][0]), blk[i][1])
 
+template withParent*(ui: var UI, parent: ElemIndex, body: untyped) =
+  ## Execute body with a specific parent element context
+  ## This allows factoring out UI code into procs while preserving parent-child relationships
+  ui.pushParent(parent)
+  try:
+    body
+  finally:
+    ui.popParent()
+
 macro elem*(blk: untyped) =
   let newBlk = updateElem(blk)
 
   quote:
     block:
-      when compiles(elemIndex):
-        let parent {.inject.} = elemIndex
+      let parent {.inject.} = when compiles(elemIndex):
+        elemIndex
       else:
-        let parent {.inject.} = ElemIndex(-1)
+        ui.currentParent()
       var elemIndex {.inject.} = ui.beginElem(Elem(), parent)
       var elemId {.inject.} = ui.elems[elemIndex.int].id
       `newBlk`
       elemId = ui.elems[elemIndex.int].id
 
       if ui.elems[elemIndex.int].scrollable:
-        ui.widget(elemId)
+        ui.registerWidget(elemId)
 
       if ui.elems[elemIndex.int].scrollable and elemId.hot(ui):
         if not ui.hasState(elemId):

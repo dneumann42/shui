@@ -11,19 +11,26 @@ type
     disabled* = false
     toggle*: ButtonToggleState
 
-proc extractConfig(node: NimNode): ButtonConfig =
-  result = ButtonConfig()
+proc extractConfig(node: NimNode): tuple[config: ButtonConfig, toggleExpr: NimNode] =
+  result.config = ButtonConfig()
+  result.toggleExpr = nil
   for child in node.items:
     if child.kind == nnkAsgn:
       if child[0].repr == "disabled":
-        result.disabled = child[1].repr == "true"
+        result.config.disabled = child[1].repr == "true"
       if child[0].repr == "toggle":
-        result.toggle = parseEnum[ButtonToggleState](child[1].repr)
+        # Check if it's a literal enum value or a runtime expression
+        if child[1].kind in {nnkIdent, nnkSym}:
+          # Compile-time literal like "On" or "Off"
+          result.config.toggle = parseEnum[ButtonToggleState](child[1].repr)
+        else:
+          # Runtime expression like "state.debugShapes"
+          result.toggleExpr = child[1]
 
 proc toToggle*(bol: bool): ButtonToggleState = (if bol: On else: Off)
 
 macro button*(text: string, id: ElemId, blk: untyped) =
-  let config = extractConfig(blk)
+  let (config, toggleExpr) = extractConfig(blk)
   var onClick = nnkStmtList.newTree()
 
   for i in 0 ..< blk.len:
@@ -34,13 +41,21 @@ macro button*(text: string, id: ElemId, blk: untyped) =
         if `id`.pressed(ui):
           `fn`
 
+  # Generate the toggle check expression
+  let toggleCheck = if toggleExpr != nil:
+    quote do:
+      `toggleExpr` == On
+  else:
+    quote do:
+      `config`.toggle == On
+
   quote:
     let config = `config`
-    ui.widget(`id`)
+    ui.registerWidget(`id`)
     `onClick`
     block:
       var bgCol =
-        if `id`.hot(ui) or config.toggle == On:
+        if `id`.hot(ui) or `toggleCheck`:
           color(0.35, 0.34, 0.7)
         else:
           color(0.1, 0.1, 0.3)
@@ -58,7 +73,7 @@ macro button*(text: string, id: ElemId, blk: untyped) =
           borderColor: color(0.6, 0.6, 0.6),
           border: 1,
           padding: 4,
-          borderRadius: 0.4,
+          borderRadius: 8.0,
         )
         size = (w: Fit, h: Fit)
         dir = Row
@@ -66,7 +81,7 @@ macro button*(text: string, id: ElemId, blk: untyped) =
         crossAlign = Center
         elem:
           text = `text`
-          style = Style(fg: fgCol, bg: color(0.0))
+          style = Style(fg: fgCol, bg: color(0.0, 0.0, 0.0, 0.0))
 
 proc label*(ui: var UI, elemIndex: ElemIndex, text: string) {.inline.} =
   elem:
