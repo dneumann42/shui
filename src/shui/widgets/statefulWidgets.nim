@@ -246,12 +246,13 @@ macro widget*(args: varargs[untyped]): untyped =
         else:
           error("Invalid state field structure: " & repr(field), field)
       of nnkAsgn:
-        # fieldName: Type = defaultValue
-        let nameAndType = field[0]
+        # fieldName: Type = defaultValue OR fieldName = value (type inferred)
+        let lhs = field[0]
         let defaultValue = field[1]
-        if nameAndType.kind == nnkExprColonExpr:
-          let fieldName = nameAndType[0]
-          let fieldType = nameAndType[1]
+        if lhs.kind == nnkExprColonExpr:
+          # fieldName: Type = value
+          let fieldName = lhs[0]
+          let fieldType = lhs[1]
           stateFields.add(
             nnkIdentDefs.newTree(
               nnkPostfix.newTree(ident("*"), fieldName),
@@ -259,8 +260,29 @@ macro widget*(args: varargs[untyped]): untyped =
               defaultValue
             )
           )
+        elif lhs.kind == nnkIdent:
+          # fieldName = value (infer type)
+          let fieldName = lhs
+          stateFields.add(
+            nnkIdentDefs.newTree(
+              nnkPostfix.newTree(ident("*"), fieldName),
+              newEmptyNode(),  # Empty type = infer from value
+              defaultValue
+            )
+          )
         else:
           error("Invalid state field format: " & repr(field), field)
+      of nnkExprColonExpr:
+        # fieldName: Type (no default value)
+        let fieldName = field[0]
+        let fieldType = field[1]
+        stateFields.add(
+          nnkIdentDefs.newTree(
+            nnkPostfix.newTree(ident("*"), fieldName),
+            fieldType,
+            newEmptyNode()  # No default value
+          )
+        )
       of nnkIdentDefs:
         # Already in correct format
         stateFields.add(field)
@@ -357,6 +379,13 @@ macro widget*(args: varargs[untyped]): untyped =
 
     # Build the render proc body
     let renderProcBody = newStmtList()
+
+    # Add container template for auto-parenting child widgets
+    let containerTemplate = quote do:
+      template container(body: untyped) =
+        ui.withParent(elemIndex):
+          body
+    renderProcBody.add(containerTemplate)
 
     # Add onEvent template for child events (always available)
     let onEventTemplate = quote do:
