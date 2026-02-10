@@ -3,8 +3,32 @@
 ## Provides a macro for defining stateful UI widgets with local event handling.
 ## This allows creating reusable, self-contained UI components with their own
 ## state management and event handling logic.
+##
+## Includes a simple signal system for widget-to-widget communication.
 
 import macros
+
+# Simple signal type for widget communication
+type
+  Signal*[T] = object
+    callbacks: seq[proc(args: T) {.gcsafe.}]
+
+  Signal0* = object
+    callbacks: seq[proc() {.gcsafe.}]
+
+proc emit*[T](signal: var Signal[T], args: T) {.inline.} =
+  for cb in signal.callbacks:
+    cb(args)
+
+proc emit*(signal: var Signal0) {.inline.} =
+  for cb in signal.callbacks:
+    cb()
+
+proc connect*[T](signal: var Signal[T], callback: proc(args: T) {.gcsafe.}) =
+  signal.callbacks.add(callback)
+
+proc connect*(signal: var Signal0, callback: proc() {.gcsafe.}) =
+  signal.callbacks.add(callback)
 
 proc transformEmitCalls(node: NimNode, eventName: NimNode): NimNode =
   ## Transform `emit EventKind` into `emit(Event(kind: EventKind))`
@@ -49,12 +73,16 @@ proc transformEmitCalls(node: NimNode, eventName: NimNode): NimNode =
     result.add(transformEmitCalls(child, eventName))
 
 macro widget*(args: varargs[untyped]): untyped =
-  ## Define a stateful Shui widget with local event handling
+  ## Define a stateful Shui widget with local event handling and signals
   ##
   ## Example:
   ##   widget Counter:
   ##     state:
   ##       count: int = 0
+  ##       childWidget: ChildWidgetState
+  ##     signals:
+  ##       onIncrement(amount: int)
+  ##       onDecrement
   ##     event:
   ##       Increment
   ##       Decrement
@@ -64,9 +92,14 @@ macro widget*(args: varargs[untyped]): untyped =
   ##       of Increment: state.count += 1
   ##       of Decrement: state.count -= 1
   ##       of SetValue: state.count = evt.value
+  ##     init:
+  ##       # Initialize child widgets and connect signals
+  ##       state.childWidget.onClicked.connect(proc() = emit Increment)
   ##     render(ui: var UI):
   ##       button("Click"):
-  ##         onClick: emit Increment
+  ##         onClick:
+  ##           emit Increment
+  ##           state.onIncrement.emit(1)
 
   # Parse: widget Name: body
   # args[0] is the name, args[1] is the body
@@ -78,18 +111,28 @@ macro widget*(args: varargs[untyped]): untyped =
 
   expectKind(body, nnkStmtList)
 
-  var stateSection, eventSection, handleSection, renderSection: NimNode
+  var stateSection, signalsSection, eventSection, handleSection, handleChildrenSection, initSection, renderSection: NimNode
 
-  # Parse the component definition sections
+  # Parse the widget definition sections
   for stmt in body:
     if stmt.kind == nnkCall and stmt.len >= 2:
       let sectionName = stmt[0]
       if sectionName.eqIdent("state"):
         stateSection = stmt[1]
+      elif sectionName.eqIdent("signals"):
+        signalsSection = stmt[1]
       elif sectionName.eqIdent("event"):
         eventSection = stmt[1]
       elif sectionName.eqIdent("handle"):
-        handleSection = stmt
+        # Distinguish between handle(evt): and handle:
+        if stmt.len == 3 and stmt[1].kind == nnkIdent:
+          # handle(evt): - handles widget's own events
+          handleSection = stmt
+        elif stmt.len == 2 and stmt[1].kind == nnkStmtList:
+          # handle: - handles child events
+          handleChildrenSection = stmt[1]
+      elif sectionName.eqIdent("init"):
+        initSection = stmt
       elif sectionName.kind == nnkObjConstr and sectionName[0].eqIdent("render"):
         # render(params): body is parsed as Call(ObjConstr(render, params...), body)
         renderSection = stmt
@@ -102,66 +145,7 @@ macro widget*(args: varargs[untyped]): untyped =
 
   result = newStmtList()
 
-  # 1. Generate state type
-  var stateFields = nnkRecList.newTree()
-  if stateSection != nil:
-    for field in stateSection:
-      case field.kind:
-      of nnkCall:
-        # This is: fieldName: Type = value
-        # Structure: Call(Ident fieldName, StmtList(Asgn(Type, value)))
-        if field.len == 2 and field[0].kind == nnkIdent and field[1].kind == nnkStmtList:
-          # fieldName: Type = value format
-          let fieldName = field[0]
-          let stmtList = field[1]
-          if stmtList.len > 0 and stmtList[0].kind == nnkAsgn:
-            let fieldType = stmtList[0][0]
-            let defaultValue = stmtList[0][1]
-            stateFields.add(
-              nnkIdentDefs.newTree(
-                nnkPostfix.newTree(ident("*"), fieldName),
-                fieldType,
-                defaultValue
-              )
-            )
-          else:
-            error("Invalid state field format: " & repr(field), field)
-        else:
-          error("Invalid state field structure: " & repr(field), field)
-      of nnkAsgn:
-        # fieldName: Type = defaultValue
-        let nameAndType = field[0]
-        let defaultValue = field[1]
-        if nameAndType.kind == nnkExprColonExpr:
-          let fieldName = nameAndType[0]
-          let fieldType = nameAndType[1]
-          stateFields.add(
-            nnkIdentDefs.newTree(
-              nnkPostfix.newTree(ident("*"), fieldName),
-              fieldType,
-              defaultValue
-            )
-          )
-        else:
-          error("Invalid state field format: " & repr(field), field)
-      of nnkIdentDefs:
-        # Already in correct format
-        stateFields.add(field)
-      else:
-        error("Invalid state field kind " & $field.kind & ": " & repr(field), field)
-
-  let stateTypeDef = nnkTypeDef.newTree(
-    nnkPostfix.newTree(ident("*"), stateName),
-    newEmptyNode(),
-    nnkObjectTy.newTree(
-      newEmptyNode(),
-      newEmptyNode(),
-      stateFields
-    )
-  )
-  result.add(nnkTypeSection.newTree(stateTypeDef))
-
-  # 2. Generate event types
+  # 1. Generate event types first (if needed by state)
   if eventSection != nil:
     var eventKinds = nnkEnumTy.newTree(newEmptyNode())
     var eventRecCase = nnkRecCase.newTree(
@@ -224,6 +208,121 @@ macro widget*(args: varargs[untyped]): untyped =
     )
     result.add(nnkTypeSection.newTree(eventTypeDef))
 
+  # 2. Generate state type
+  var stateFields = nnkRecList.newTree()
+
+  # Add lastEvent field if widget has events
+  if eventSection != nil:
+    stateFields.add(
+      nnkIdentDefs.newTree(
+        nnkPostfix.newTree(ident("*"), ident("lastEvent")),
+        nnkBracketExpr.newTree(ident("Option"), eventName),
+        newEmptyNode()
+      )
+    )
+
+  if stateSection != nil:
+    for field in stateSection:
+      case field.kind:
+      of nnkCall:
+        # This is: fieldName: Type = value
+        # Structure: Call(Ident fieldName, StmtList(Asgn(Type, value)))
+        if field.len == 2 and field[0].kind == nnkIdent and field[1].kind == nnkStmtList:
+          # fieldName: Type = value format
+          let fieldName = field[0]
+          let stmtList = field[1]
+          if stmtList.len > 0 and stmtList[0].kind == nnkAsgn:
+            let fieldType = stmtList[0][0]
+            let defaultValue = stmtList[0][1]
+            stateFields.add(
+              nnkIdentDefs.newTree(
+                nnkPostfix.newTree(ident("*"), fieldName),
+                fieldType,
+                defaultValue
+              )
+            )
+          else:
+            error("Invalid state field format: " & repr(field), field)
+        else:
+          error("Invalid state field structure: " & repr(field), field)
+      of nnkAsgn:
+        # fieldName: Type = defaultValue
+        let nameAndType = field[0]
+        let defaultValue = field[1]
+        if nameAndType.kind == nnkExprColonExpr:
+          let fieldName = nameAndType[0]
+          let fieldType = nameAndType[1]
+          stateFields.add(
+            nnkIdentDefs.newTree(
+              nnkPostfix.newTree(ident("*"), fieldName),
+              fieldType,
+              defaultValue
+            )
+          )
+        else:
+          error("Invalid state field format: " & repr(field), field)
+      of nnkIdentDefs:
+        # Already in correct format
+        stateFields.add(field)
+      else:
+        error("Invalid state field kind " & $field.kind & ": " & repr(field), field)
+
+  # Add signal fields to state
+  if signalsSection != nil:
+    for signalDef in signalsSection:
+      case signalDef.kind:
+      of nnkIdent:
+        # Simple signal: SignalName (no parameters)
+        let signalName = signalDef
+        stateFields.add(
+          nnkIdentDefs.newTree(
+            nnkPostfix.newTree(ident("*"), signalName),
+            ident("Signal0"),
+            newEmptyNode()
+          )
+        )
+      of nnkCall, nnkObjConstr:
+        # Signal with parameters: SignalName(param: Type, ...)
+        let signalName = signalDef[0]
+        var paramTypes = newSeq[NimNode]()
+        for i in 1 ..< signalDef.len:
+          let param = signalDef[i]
+          if param.kind == nnkExprColonExpr:
+            paramTypes.add(param[1])  # Just the type
+          else:
+            error("Invalid signal parameter: " & repr(param), param)
+
+        # If single parameter, use Signal[Type], otherwise use Signal[tuple[...]]
+        let signalType =
+          if paramTypes.len == 1:
+            nnkBracketExpr.newTree(ident("Signal"), paramTypes[0])
+          else:
+            var tupleType = nnkTupleConstr.newTree()
+            for pt in paramTypes:
+              tupleType.add(pt)
+            nnkBracketExpr.newTree(ident("Signal"), tupleType)
+
+        stateFields.add(
+          nnkIdentDefs.newTree(
+            nnkPostfix.newTree(ident("*"), signalName),
+            signalType,
+            newEmptyNode()
+          )
+        )
+      else:
+        error("Invalid signal definition: " & repr(signalDef), signalDef)
+
+  let stateTypeDef = nnkTypeDef.newTree(
+    nnkPostfix.newTree(ident("*"), stateName),
+    newEmptyNode(),
+    nnkObjectTy.newTree(
+      newEmptyNode(),
+      newEmptyNode(),
+      stateFields
+    )
+  )
+  result.add(nnkTypeSection.newTree(stateTypeDef))
+
   # 3. Generate render proc with emit and handle
   if renderSection != nil:
     # renderSection is Call(ObjConstr(render, ExprColonExpr...), StmtList(body))
@@ -259,11 +358,27 @@ macro widget*(args: varargs[untyped]): untyped =
     # Build the render proc body
     let renderProcBody = newStmtList()
 
+    # Add onEvent template for child events (always available)
+    let onEventTemplate = quote do:
+      template onEvent(childState: var auto, eventKind: untyped, body: untyped) =
+        if childState.lastEvent.isSome:
+          let evt = childState.lastEvent.get()
+          if evt.kind == eventKind:
+            body
+            childState.lastEvent.reset()
+    renderProcBody.add(onEventTemplate)
+
     # Only create emit template and transform emit calls if events are defined
     let transformedRenderBody =
       if eventSection != nil:
         # Build the emit template (not a proc, to avoid closure capture issues)
         let emitTemplateBody = newStmtList()
+
+        # Store event in lastEvent for parent checking
+        emitTemplateBody.add(quote do:
+          state.lastEvent = some(event)
+        )
+
         if handleSection != nil and handleSection.len >= 3:
           # handleSection is Call(Ident "handle", Ident "evt", StmtList(body))
           let handleParam = handleSection[1]  # evt parameter name
@@ -301,6 +416,11 @@ macro widget*(args: varargs[untyped]): untyped =
 
         renderProcBody.add(emitTemplate)
 
+        # Inject handleChildren code after emit template is defined (with transformed emit calls)
+        if handleChildrenSection != nil:
+          let transformedHandleChildren = transformEmitCalls(handleChildrenSection, eventName)
+          renderProcBody.add(transformedHandleChildren)
+
         # Transform emit calls in render body
         transformEmitCalls(renderBody, eventName)
       else:
@@ -319,5 +439,57 @@ macro widget*(args: varargs[untyped]): untyped =
         nnkPragma.newTree(ident("gcsafe")),
         newEmptyNode(),
         renderProcBody
+      )
+    )
+
+  # 4. Generate init proc if init section exists
+  if initSection != nil and initSection.len >= 2:
+    let initProcName = ident("init" & $name)
+
+    # Parse init section: init(params): body or just init: body
+    var initParams = nnkFormalParams.newTree(newEmptyNode())
+    var initBody: NimNode
+
+    if initSection[0].kind == nnkObjConstr:
+      # init(params): body
+      let objConstr = initSection[0]
+      initBody = initSection[1]
+
+      # Add custom parameters from ObjConstr
+      for i in 1 ..< objConstr.len:
+        let paramExpr = objConstr[i]
+        if paramExpr.kind == nnkExprColonExpr:
+          let paramName = paramExpr[0]
+          let paramType = paramExpr[1]
+          initParams.add(
+            nnkIdentDefs.newTree(
+              paramName,
+              paramType,
+              newEmptyNode()
+            )
+          )
+    else:
+      # init: body (no parameters)
+      initBody = initSection[1]
+
+    # Add state parameter
+    initParams.add(
+      nnkIdentDefs.newTree(
+        ident("state"),
+        nnkVarTy.newTree(stateName),
+        newEmptyNode()
+      )
+    )
+
+    # Build init proc
+    result.add(
+      nnkProcDef.newTree(
+        nnkPostfix.newTree(ident("*"), initProcName),
+        newEmptyNode(),
+        newEmptyNode(),
+        initParams,
+        nnkPragma.newTree(ident("gcsafe")),
+        newEmptyNode(),
+        initBody
       )
     )
