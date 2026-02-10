@@ -416,18 +416,6 @@ macro widget*(args: varargs[untyped]): untyped =
 
         renderProcBody.add(emitTemplate)
 
-        # Inject handleChildren code after emit template is defined (with transformed emit calls)
-        if handleChildrenSection != nil:
-          let transformedHandleChildren = transformEmitCalls(handleChildrenSection, eventName)
-          # Wrap in a block to isolate from UI building context
-          let handleBlock = newStmtList(
-            nnkBlockStmt.newTree(
-              newEmptyNode(),
-              transformedHandleChildren
-            )
-          )
-          renderProcBody.add(handleBlock)
-
         # Transform emit calls in render body
         transformEmitCalls(renderBody, eventName)
       else:
@@ -440,6 +428,19 @@ macro widget*(args: varargs[untyped]): untyped =
         renderProcBody.add(stmt)
     else:
       renderProcBody.add(transformedRenderBody)
+
+    # Inject handleChildren code AFTER render (with transformed emit calls)
+    # This ensures the UI is rendered before events are processed
+    if eventSection != nil and handleChildrenSection != nil:
+      let transformedHandleChildren = transformEmitCalls(handleChildrenSection, eventName)
+      # Wrap in a block to isolate from UI building context
+      let handleBlock = newStmtList(
+        nnkBlockStmt.newTree(
+          newEmptyNode(),
+          transformedHandleChildren
+        )
+      )
+      renderProcBody.add(handleBlock)
 
     # Build render proc
     result.add(
