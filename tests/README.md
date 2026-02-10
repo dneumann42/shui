@@ -81,8 +81,8 @@ nimble test
 widget Counter:
   state:
     count: int = 0
-  render(ui: var UI):
-    discard
+  render:
+    discard  # ui is implicitly available from scope
 
 var state = Counter(count: 5)
 ```
@@ -99,8 +99,8 @@ widget EventCounter:
     case evt.kind
     of Increment: state.count += 1
     of SetValue: state.count = evt.value
-  render(ui: var UI):
-    discard
+  render:
+    discard  # ui is implicitly available
 ```
 
 ### Parent-Child Communication
@@ -108,7 +108,7 @@ widget EventCounter:
 widget ChildButton:
   event:
     Click
-  render(ui: var UI):
+  render:
     discard
 
 widget Container:
@@ -118,7 +118,7 @@ widget Container:
   handle:
     onEvent state.button, Click:
       state.clickCount += 1
-  render(ui: var UI):
+  render:
     discard
 ```
 
@@ -127,15 +127,19 @@ widget Container:
 widget Container:
   state:
     padding: int = 0
-  render(ui: var UI, slot: untyped):
+  render(slot: untyped):
+    # ui is implicitly available from scope
+    # slot parameter makes this a template
     discard
 ```
 
 ## Notes
 
+- **Implicit UI**: The `ui` variable is implicitly available in all render sections - no need to declare it as a parameter
 - All state fields should have default values for proper initialization
 - Widgets can be stateless (no state section)
 - Type aliases allow using `WidgetName` or `WidgetNameState` interchangeably
 - The `slot: untyped` parameter triggers template generation instead of proc
 - Parent widgets can handle child events using `onEvent` in `handle:` section
 - Widgets can have both own event handlers and child event handlers
+- Custom parameters (other than `slot`) can be added to render, but `ui` is always implicit

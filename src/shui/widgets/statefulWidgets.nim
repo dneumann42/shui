@@ -380,12 +380,16 @@ macro widget*(args: varargs[untyped]): untyped =
       # render(params): body - has ObjConstr with parameters
       let objConstr = renderSection[0]
 
-      # Add custom parameters from ObjConstr
+      # Add custom parameters from ObjConstr (but skip ui parameter if present)
       for i in 1 ..< objConstr.len:
         let paramExpr = objConstr[i]
         if paramExpr.kind == nnkExprColonExpr:
           let paramName = paramExpr[0]
           let paramType = paramExpr[1]
+
+          # Skip ui parameter - it's implicit from scope
+          if paramName.eqIdent("ui"):
+            continue
 
           # Check if this is a children: untyped parameter
           if paramName.eqIdent("slot") and paramType.eqIdent("untyped"):
@@ -400,15 +404,6 @@ macro widget*(args: varargs[untyped]): untyped =
               )
             )
             childrenParams.add(paramName)  # Track params for template
-    else:
-      # render: body - no parameters specified, add default ui: var UI
-      procParams.add(
-        nnkIdentDefs.newTree(
-          ident("ui"),
-          nnkVarTy.newTree(ident("UI")),
-          newEmptyNode()
-        )
-      )
 
     # Add state parameter (only if widget has state)
     if hasState:

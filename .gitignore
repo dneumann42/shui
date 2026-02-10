@@ -3,3 +3,4 @@ tests/test_basic
 tests/test_label
 tests/test_macros
 *.out
+tests/twidgets
