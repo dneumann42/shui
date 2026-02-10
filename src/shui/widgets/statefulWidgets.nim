@@ -133,6 +133,9 @@ macro widget*(args: varargs[untyped]): untyped =
           handleChildrenSection = stmt[1]
       elif sectionName.eqIdent("init"):
         initSection = stmt
+      elif sectionName.eqIdent("render"):
+        # render: body (no params) is parsed as Call(Ident("render"), StmtList(body))
+        renderSection = stmt
       elif sectionName.kind == nnkObjConstr and sectionName[0].eqIdent("render"):
         # render(params): body is parsed as Call(ObjConstr(render, params...), body)
         renderSection = stmt
@@ -141,7 +144,13 @@ macro widget*(args: varargs[untyped]): untyped =
   let stateName = ident($name & "State")
   let eventKindName = ident($name & "EventKind")
   let eventName = ident($name & "Event")
-  let renderProcName = ident("render" & $name)
+  # Simplified render name: just lowercase widget name
+  let renderProcName = block:
+    let nameStr = $name
+    var lowerName = nameStr
+    if lowerName.len > 0:
+      lowerName[0] = chr(ord(lowerName[0]) + 32)  # Convert first char to lowercase
+    ident(lowerName)
 
   result = newStmtList()
 
@@ -208,183 +217,208 @@ macro widget*(args: varargs[untyped]): untyped =
     )
     result.add(nnkTypeSection.newTree(eventTypeDef))
 
-  # 2. Generate state type
-  var stateFields = nnkRecList.newTree()
+  # 2. Generate state type (only if state section exists or widget has events)
+  let hasState = stateSection != nil or eventSection != nil
 
-  # Add lastEvent field if widget has events
-  if eventSection != nil:
-    stateFields.add(
-      nnkIdentDefs.newTree(
-        nnkPostfix.newTree(ident("*"), ident("lastEvent")),
-        nnkBracketExpr.newTree(ident("Option"), eventName),
-        newEmptyNode()
+  if hasState:
+    var stateFields = nnkRecList.newTree()
+
+    # Add lastEvent field if widget has events
+    if eventSection != nil:
+      stateFields.add(
+        nnkIdentDefs.newTree(
+          nnkPostfix.newTree(ident("*"), ident("lastEvent")),
+          nnkBracketExpr.newTree(ident("Option"), eventName),
+          newEmptyNode()
+        )
+      )
+
+    if stateSection != nil:
+      for field in stateSection:
+        case field.kind:
+          of nnkCall:
+            # This is: fieldName: Type = value
+            # Structure: Call(Ident fieldName, StmtList(Asgn(Type, value)))
+            if field.len == 2 and field[0].kind == nnkIdent and field[1].kind == nnkStmtList:
+              # fieldName: Type = value format
+              let fieldName = field[0]
+              let stmtList = field[1]
+              if stmtList.len > 0 and stmtList[0].kind == nnkAsgn:
+                let fieldType = stmtList[0][0]
+                let defaultValue = stmtList[0][1]
+                stateFields.add(
+                  nnkIdentDefs.newTree(
+                    nnkPostfix.newTree(ident("*"), fieldName),
+                    fieldType,
+                    defaultValue
+                  )
+                )
+              else:
+                error("Invalid state field format: " & repr(field), field)
+            else:
+              error("Invalid state field structure: " & repr(field), field)
+          of nnkAsgn:
+            # fieldName: Type = defaultValue OR fieldName = value (type inferred)
+            let lhs = field[0]
+            let defaultValue = field[1]
+            if lhs.kind == nnkExprColonExpr:
+              # fieldName: Type = value
+              let fieldName = lhs[0]
+              let fieldType = lhs[1]
+              stateFields.add(
+                nnkIdentDefs.newTree(
+                  nnkPostfix.newTree(ident("*"), fieldName),
+                  fieldType,
+                  defaultValue
+                )
+              )
+            elif lhs.kind == nnkIdent:
+              # fieldName = value (infer type)
+              let fieldName = lhs
+              stateFields.add(
+                nnkIdentDefs.newTree(
+                  nnkPostfix.newTree(ident("*"), fieldName),
+                  newEmptyNode(),  # Empty type = infer from value
+                  defaultValue
+                )
+              )
+            else:
+              error("Invalid state field format: " & repr(field), field)
+          of nnkExprColonExpr:
+              # fieldName: Type (no default value)
+              let fieldName = field[0]
+              let fieldType = field[1]
+              stateFields.add(
+                nnkIdentDefs.newTree(
+                  nnkPostfix.newTree(ident("*"), fieldName),
+                  fieldType,
+                  newEmptyNode()  # No default value
+                )
+              )
+          of nnkIdentDefs:
+            # Already in correct format
+            stateFields.add(field)
+          else:
+            error("Invalid state field kind " & $field.kind & ": " & repr(field), field)
+
+    # Add signal fields to state
+    if signalsSection != nil:
+      for signalDef in signalsSection:
+        case signalDef.kind:
+        of nnkIdent:
+          # Simple signal: SignalName (no parameters)
+          let signalName = signalDef
+          stateFields.add(
+            nnkIdentDefs.newTree(
+              nnkPostfix.newTree(ident("*"), signalName),
+              ident("Signal0"),
+              newEmptyNode()
+            )
+          )
+        of nnkCall, nnkObjConstr:
+          # Signal with parameters: SignalName(param: Type, ...)
+          let signalName = signalDef[0]
+          var paramTypes = newSeq[NimNode]()
+          for i in 1 ..< signalDef.len:
+            let param = signalDef[i]
+            if param.kind == nnkExprColonExpr:
+              paramTypes.add(param[1])  # Just the type
+            else:
+              error("Invalid signal parameter: " & repr(param), param)
+
+          # If single parameter, use Signal[Type], otherwise use Signal[tuple[...]]
+          let signalType =
+            if paramTypes.len == 1:
+              nnkBracketExpr.newTree(ident("Signal"), paramTypes[0])
+            else:
+              var tupleType = nnkTupleConstr.newTree()
+              for pt in paramTypes:
+                tupleType.add(pt)
+              nnkBracketExpr.newTree(ident("Signal"), tupleType)
+
+          stateFields.add(
+            nnkIdentDefs.newTree(
+              nnkPostfix.newTree(ident("*"), signalName),
+              signalType,
+              newEmptyNode()
+            )
+          )
+        else:
+          error("Invalid signal definition: " & repr(signalDef), signalDef)
+
+    let stateTypeDef = nnkTypeDef.newTree(
+      nnkPostfix.newTree(ident("*"), stateName),
+      newEmptyNode(),
+      nnkObjectTy.newTree(
+        newEmptyNode(),
+        newEmptyNode(),
+        stateFields
       )
     )
 
-  if stateSection != nil:
-    for field in stateSection:
-      case field.kind:
-      of nnkCall:
-        # This is: fieldName: Type = value
-        # Structure: Call(Ident fieldName, StmtList(Asgn(Type, value)))
-        if field.len == 2 and field[0].kind == nnkIdent and field[1].kind == nnkStmtList:
-          # fieldName: Type = value format
-          let fieldName = field[0]
-          let stmtList = field[1]
-          if stmtList.len > 0 and stmtList[0].kind == nnkAsgn:
-            let fieldType = stmtList[0][0]
-            let defaultValue = stmtList[0][1]
-            stateFields.add(
-              nnkIdentDefs.newTree(
-                nnkPostfix.newTree(ident("*"), fieldName),
-                fieldType,
-                defaultValue
-              )
-            )
-          else:
-            error("Invalid state field format: " & repr(field), field)
-        else:
-          error("Invalid state field structure: " & repr(field), field)
-      of nnkAsgn:
-        # fieldName: Type = defaultValue OR fieldName = value (type inferred)
-        let lhs = field[0]
-        let defaultValue = field[1]
-        if lhs.kind == nnkExprColonExpr:
-          # fieldName: Type = value
-          let fieldName = lhs[0]
-          let fieldType = lhs[1]
-          stateFields.add(
-            nnkIdentDefs.newTree(
-              nnkPostfix.newTree(ident("*"), fieldName),
-              fieldType,
-              defaultValue
-            )
-          )
-        elif lhs.kind == nnkIdent:
-          # fieldName = value (infer type)
-          let fieldName = lhs
-          stateFields.add(
-            nnkIdentDefs.newTree(
-              nnkPostfix.newTree(ident("*"), fieldName),
-              newEmptyNode(),  # Empty type = infer from value
-              defaultValue
-            )
-          )
-        else:
-          error("Invalid state field format: " & repr(field), field)
-      of nnkExprColonExpr:
-        # fieldName: Type (no default value)
-        let fieldName = field[0]
-        let fieldType = field[1]
-        stateFields.add(
-          nnkIdentDefs.newTree(
-            nnkPostfix.newTree(ident("*"), fieldName),
-            fieldType,
-            newEmptyNode()  # No default value
-          )
-        )
-      of nnkIdentDefs:
-        # Already in correct format
-        stateFields.add(field)
-      else:
-        error("Invalid state field kind " & $field.kind & ": " & repr(field), field)
-
-  # Add signal fields to state
-  if signalsSection != nil:
-    for signalDef in signalsSection:
-      case signalDef.kind:
-      of nnkIdent:
-        # Simple signal: SignalName (no parameters)
-        let signalName = signalDef
-        stateFields.add(
-          nnkIdentDefs.newTree(
-            nnkPostfix.newTree(ident("*"), signalName),
-            ident("Signal0"),
-            newEmptyNode()
-          )
-        )
-      of nnkCall, nnkObjConstr:
-        # Signal with parameters: SignalName(param: Type, ...)
-        let signalName = signalDef[0]
-        var paramTypes = newSeq[NimNode]()
-        for i in 1 ..< signalDef.len:
-          let param = signalDef[i]
-          if param.kind == nnkExprColonExpr:
-            paramTypes.add(param[1])  # Just the type
-          else:
-            error("Invalid signal parameter: " & repr(param), param)
-
-        # If single parameter, use Signal[Type], otherwise use Signal[tuple[...]]
-        let signalType =
-          if paramTypes.len == 1:
-            nnkBracketExpr.newTree(ident("Signal"), paramTypes[0])
-          else:
-            var tupleType = nnkTupleConstr.newTree()
-            for pt in paramTypes:
-              tupleType.add(pt)
-            nnkBracketExpr.newTree(ident("Signal"), tupleType)
-
-        stateFields.add(
-          nnkIdentDefs.newTree(
-            nnkPostfix.newTree(ident("*"), signalName),
-            signalType,
-            newEmptyNode()
-          )
-        )
-      else:
-        error("Invalid signal definition: " & repr(signalDef), signalDef)
-
-  let stateTypeDef = nnkTypeDef.newTree(
-    nnkPostfix.newTree(ident("*"), stateName),
-    newEmptyNode(),
-    nnkObjectTy.newTree(
+    # Also create a type alias using the widget name (without "State" suffix)
+    let typeAlias = nnkTypeDef.newTree(
+      nnkPostfix.newTree(ident("*"), name),
       newEmptyNode(),
-      newEmptyNode(),
-      stateFields
+      stateName
     )
-  )
-  result.add(nnkTypeSection.newTree(stateTypeDef))
+
+    result.add(nnkTypeSection.newTree(stateTypeDef, typeAlias))
 
   # 3. Generate render proc with emit and handle
   if renderSection != nil:
-    # renderSection is Call(ObjConstr(render, ExprColonExpr...), StmtList(body))
-    let objConstr = renderSection[0]
-    let renderBody = renderSection[1]
-
     # Build the parameter list for render proc/template
     var procParams = nnkFormalParams.newTree(newEmptyNode())
     var hasChildrenSlot = false
     var childrenParams = newSeq[NimNode]()
 
-    # Add custom parameters from ObjConstr
-    for i in 1 ..< objConstr.len:
-      let paramExpr = objConstr[i]
-      if paramExpr.kind == nnkExprColonExpr:
-        let paramName = paramExpr[0]
-        let paramType = paramExpr[1]
+    # Determine if this is parameterless render or has parameters
+    let renderBody = renderSection[1]
+    let hasRenderParams = renderSection[0].kind == nnkObjConstr
 
-        # Check if this is a children: untyped parameter
-        if paramName.eqIdent("slot") and paramType.eqIdent("untyped"):
-          hasChildrenSlot = true
-          # Don't add to procParams yet - will add after state
-        else:
-          procParams.add(
-            nnkIdentDefs.newTree(
-              paramName,
-              paramType,
-              newEmptyNode()
+    if hasRenderParams:
+      # render(params): body - has ObjConstr with parameters
+      let objConstr = renderSection[0]
+
+      # Add custom parameters from ObjConstr
+      for i in 1 ..< objConstr.len:
+        let paramExpr = objConstr[i]
+        if paramExpr.kind == nnkExprColonExpr:
+          let paramName = paramExpr[0]
+          let paramType = paramExpr[1]
+
+          # Check if this is a children: untyped parameter
+          if paramName.eqIdent("slot") and paramType.eqIdent("untyped"):
+            hasChildrenSlot = true
+            # Don't add to procParams yet - will add after state
+          else:
+            procParams.add(
+              nnkIdentDefs.newTree(
+                paramName,
+                paramType,
+                newEmptyNode()
+              )
             )
-          )
-          childrenParams.add(paramName)  # Track params for template
-
-    # Add state parameter
-    procParams.add(
-      nnkIdentDefs.newTree(
-        ident("state"),
-        nnkVarTy.newTree(stateName),
-        newEmptyNode()
+            childrenParams.add(paramName)  # Track params for template
+    else:
+      # render: body - no parameters specified, add default ui: var UI
+      procParams.add(
+        nnkIdentDefs.newTree(
+          ident("ui"),
+          nnkVarTy.newTree(ident("UI")),
+          newEmptyNode()
+        )
       )
-    )
+
+    # Add state parameter (only if widget has state)
+    if hasState:
+      procParams.add(
+        nnkIdentDefs.newTree(
+          ident("state"),
+          nnkVarTy.newTree(stateName),
+          newEmptyNode()
+        )
+      )
 
     # Add children parameter last if detected
     if hasChildrenSlot:
