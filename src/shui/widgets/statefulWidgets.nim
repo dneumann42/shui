@@ -360,10 +360,10 @@ macro widget*(args: varargs[untyped]): untyped =
 
     # Add onEvent template for child events (always available)
     let onEventTemplate = quote do:
-      template onEvent(childState: var auto, eventKind: untyped, body: untyped) =
+      template onEvent(childState: var auto, eventKind: typed, body: untyped) =
         if childState.lastEvent.isSome:
           let evt = childState.lastEvent.get()
-          if evt.kind == eventKind:
+          if ord(evt.kind) == ord(eventKind):
             body
             childState.lastEvent.reset()
     renderProcBody.add(onEventTemplate)
@@ -419,7 +419,14 @@ macro widget*(args: varargs[untyped]): untyped =
         # Inject handleChildren code after emit template is defined (with transformed emit calls)
         if handleChildrenSection != nil:
           let transformedHandleChildren = transformEmitCalls(handleChildrenSection, eventName)
-          renderProcBody.add(transformedHandleChildren)
+          # Wrap in a block to isolate from UI building context
+          let handleBlock = newStmtList(
+            nnkBlockStmt.newTree(
+              newEmptyNode(),
+              transformedHandleChildren
+            )
+          )
+          renderProcBody.add(handleBlock)
 
         # Transform emit calls in render body
         transformEmitCalls(renderBody, eventName)
@@ -427,7 +434,12 @@ macro widget*(args: varargs[untyped]): untyped =
         # No events, use render body as-is
         renderBody
 
-    renderProcBody.add(transformedRenderBody)
+    # Unpack render body statements into proc body
+    if transformedRenderBody.kind == nnkStmtList:
+      for stmt in transformedRenderBody:
+        renderProcBody.add(stmt)
+    else:
+      renderProcBody.add(transformedRenderBody)
 
     # Build render proc
     result.add(
