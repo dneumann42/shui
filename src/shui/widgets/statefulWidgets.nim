@@ -351,8 +351,10 @@ macro widget*(args: varargs[untyped]): untyped =
     let objConstr = renderSection[0]
     let renderBody = renderSection[1]
 
-    # Build the parameter list for render proc
+    # Build the parameter list for render proc/template
     var procParams = nnkFormalParams.newTree(newEmptyNode())
+    var hasChildrenSlot = false
+    var childrenParams = newSeq[NimNode]()
 
     # Add custom parameters from ObjConstr
     for i in 1 ..< objConstr.len:
@@ -360,13 +362,20 @@ macro widget*(args: varargs[untyped]): untyped =
       if paramExpr.kind == nnkExprColonExpr:
         let paramName = paramExpr[0]
         let paramType = paramExpr[1]
-        procParams.add(
-          nnkIdentDefs.newTree(
-            paramName,
-            paramType,
-            newEmptyNode()
+
+        # Check if this is a children: untyped parameter
+        if paramName.eqIdent("slot") and paramType.eqIdent("untyped"):
+          hasChildrenSlot = true
+          # Don't add to procParams yet - will add after state
+        else:
+          procParams.add(
+            nnkIdentDefs.newTree(
+              paramName,
+              paramType,
+              newEmptyNode()
+            )
           )
-        )
+          childrenParams.add(paramName)  # Track params for template
 
     # Add state parameter
     procParams.add(
@@ -376,6 +385,16 @@ macro widget*(args: varargs[untyped]): untyped =
         newEmptyNode()
       )
     )
+
+    # Add children parameter last if detected
+    if hasChildrenSlot:
+      procParams.add(
+        nnkIdentDefs.newTree(
+          ident("slot"),
+          ident("untyped"),
+          newEmptyNode()
+        )
+      )
 
     # Build the render proc body
     let renderProcBody = newStmtList()
@@ -471,18 +490,34 @@ macro widget*(args: varargs[untyped]): untyped =
       )
       renderProcBody.add(handleBlock)
 
-    # Build render proc
-    result.add(
-      nnkProcDef.newTree(
-        nnkPostfix.newTree(ident("*"), renderProcName),
-        newEmptyNode(),
-        newEmptyNode(),
-        procParams,
-        nnkPragma.newTree(ident("gcsafe")),
-        newEmptyNode(),
-        renderProcBody
+    # Build render proc or template
+    if hasChildrenSlot:
+      # Generate as template for children slot support
+      # Use dirty pragma to avoid hygiene issues with elem syntax
+      result.add(
+        nnkTemplateDef.newTree(
+          nnkPostfix.newTree(ident("*"), renderProcName),
+          newEmptyNode(),  # term rewriting
+          newEmptyNode(),  # generic params
+          procParams,
+          nnkPragma.newTree(ident("dirty")),  # dirty pragma
+          newEmptyNode(),  # reserved
+          renderProcBody
+        )
       )
-    )
+    else:
+      # Generate as proc
+      result.add(
+        nnkProcDef.newTree(
+          nnkPostfix.newTree(ident("*"), renderProcName),
+          newEmptyNode(),
+          newEmptyNode(),
+          procParams,
+          nnkPragma.newTree(ident("gcsafe")),
+          newEmptyNode(),
+          renderProcBody
+        )
+      )
 
   # 4. Generate init proc if init section exists
   if initSection != nil and initSection.len >= 2:
