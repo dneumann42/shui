@@ -256,49 +256,57 @@ macro widget*(args: varargs[untyped]): untyped =
       )
     )
 
-    # Build the emit template (not a proc, to avoid closure capture issues)
-    let emitTemplateBody = newStmtList()
-    if handleSection != nil and handleSection.len >= 3:
-      # handleSection is Call(Ident "handle", Ident "evt", StmtList(body))
-      let handleParam = handleSection[1]  # evt parameter name
-      let handleCode = handleSection[2]    # body
-      let eventParam = ident("event")
-
-      # Build: let evt = event; <handleCode>
-      emitTemplateBody.add(
-        nnkLetSection.newTree(
-          nnkIdentDefs.newTree(
-            handleParam,
-            newEmptyNode(),
-            eventParam
-          )
-        )
-      )
-      emitTemplateBody.add(handleCode)
-
-    let emitTemplate = nnkTemplateDef.newTree(
-      ident("emit"),
-      newEmptyNode(),
-      newEmptyNode(),
-      nnkFormalParams.newTree(
-        newEmptyNode(),
-        nnkIdentDefs.newTree(
-          ident("event"),
-          eventName,
-          newEmptyNode()
-        )
-      ),
-      newEmptyNode(),
-      newEmptyNode(),
-      emitTemplateBody
-    )
-
-    # Transform emit calls in render body
-    let transformedRenderBody = transformEmitCalls(renderBody, eventName)
-
-    # Build the render proc body with emit template and render code
+    # Build the render proc body
     let renderProcBody = newStmtList()
-    renderProcBody.add(emitTemplate)
+
+    # Only create emit template and transform emit calls if events are defined
+    let transformedRenderBody =
+      if eventSection != nil:
+        # Build the emit template (not a proc, to avoid closure capture issues)
+        let emitTemplateBody = newStmtList()
+        if handleSection != nil and handleSection.len >= 3:
+          # handleSection is Call(Ident "handle", Ident "evt", StmtList(body))
+          let handleParam = handleSection[1]  # evt parameter name
+          let handleCode = handleSection[2]    # body
+          let eventParam = ident("event")
+
+          # Build: let evt = event; <handleCode>
+          emitTemplateBody.add(
+            nnkLetSection.newTree(
+              nnkIdentDefs.newTree(
+                handleParam,
+                newEmptyNode(),
+                eventParam
+              )
+            )
+          )
+          emitTemplateBody.add(handleCode)
+
+        let emitTemplate = nnkTemplateDef.newTree(
+          ident("emit"),
+          newEmptyNode(),
+          newEmptyNode(),
+          nnkFormalParams.newTree(
+            newEmptyNode(),
+            nnkIdentDefs.newTree(
+              ident("event"),
+              eventName,
+              newEmptyNode()
+            )
+          ),
+          newEmptyNode(),
+          newEmptyNode(),
+          emitTemplateBody
+        )
+
+        renderProcBody.add(emitTemplate)
+
+        # Transform emit calls in render body
+        transformEmitCalls(renderBody, eventName)
+      else:
+        # No events, use render body as-is
+        renderBody
+
     renderProcBody.add(transformedRenderBody)
 
     # Build render proc
