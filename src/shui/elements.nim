@@ -18,9 +18,9 @@ type
     kind*: SizingKind
 
   ElemState* = enum
-    Dead
     Visible
     Disabled
+    Dead
 
   Direction* = enum
     Row
@@ -644,11 +644,32 @@ proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
 
   # Layout all roots with the same container bounds
   for root in ui.roots:
-    ui.get(root).box = container
-    ui.get(root).size = (
-      w: Sizing(kind: Fixed, min: container.w, max: container.w),
-      h: Sizing(kind: Fixed, min: container.h, max: container.h),
-    )
+    let rootSize = ui.get(root).size
+
+    # Set position from container
+    ui.get(root).box.x = container.x
+    ui.get(root).box.y = container.y
+
+    # Calculate width based on sizing kind
+    case rootSize.w.kind:
+    of Fixed:
+      ui.get(root).box.w = clampDimension(rootSize.w.max, rootSize.w)
+    of Grow:
+      ui.get(root).box.w = clampDimension(container.w, rootSize.w)
+    of Fit:
+      # Fit will be calculated by updateGrowContainer
+      ui.get(root).box.w = container.w
+
+    # Calculate height based on sizing kind
+    case rootSize.h.kind:
+    of Fixed:
+      ui.get(root).box.h = clampDimension(rootSize.h.max, rootSize.h)
+    of Grow:
+      ui.get(root).box.h = clampDimension(container.h, rootSize.h)
+    of Fit:
+      # Fit will be calculated by updateGrowContainer
+      ui.get(root).box.h = container.h
+
     ui.updateGrowContainer(root)
     ui.updateLayout(root)
 
