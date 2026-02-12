@@ -2,6 +2,8 @@
 
 A headless immediate-mode UI library with flexbox-style layout.
 
+> **⚠️ Development Status**: This library is under active development and the API may change.
+
 ## What is Shui?
 
 Shui is a UI library that handles layout, input, and widget state without rendering. You provide the paint functions, Shui provides the structure. It uses an immediate-mode API where you rebuild your UI every frame.
@@ -271,6 +273,59 @@ widget TodoList:
           button("X", ElemId("remove-" & $i)):
             onClick:
               emit RemoveItem(index: i)
+```
+
+### Handling Child Widget Events
+
+Parent widgets can connect to child widget signals in the `init` section:
+
+```nim
+widget CounterButton:
+  state:
+    count: int = 0
+
+  signals:
+    onClick()
+
+  render():
+    button("Count: " & $state.count, ElemId"counter-btn"):
+      onClick:
+        state.count += 1
+        emit onClick
+
+widget App:
+  state:
+    totalClicks: int = 0
+    counter1: CounterButton
+    counter2: CounterButton
+
+  init:
+    # Connect to child widget signals
+    state.counter1.onClick.connect(proc() =
+      state.totalClicks += 1
+    )
+    state.counter2.onClick.connect(proc() =
+      state.totalClicks += 1
+    )
+
+  render():
+    elem:
+      size = (w: Fit, h: Fit)
+      dir = Col
+      style = style(padding = 10, gap = 10)
+
+      elem:
+        text = "Total Clicks: " & $state.totalClicks
+        size = (w: Grow, h: Fit)
+
+      state.counter1.render()
+      state.counter2.render()
+
+# Usage
+var app = App()
+ui.begin()
+app.render()
+ui.updateLayout((0, 0, 800, 600))
 ```
 
 ### Input Handling
