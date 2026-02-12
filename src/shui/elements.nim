@@ -48,6 +48,8 @@ type
     id: ElemId
     size*: tuple[w, h: Sizing]
     floating*: bool
+    absolute*: bool  # Absolute positioning (ignores parent layout)
+    pos*: tuple[x, y: int]  # Absolute position when absolute=true
     clipOverflow*: bool
     scrollable*: bool
     scrollY*: float
@@ -90,7 +92,7 @@ type
   MeasureTextProc = proc(text: string): tuple[w, h: int] {.gcsafe.}
 
   UI* = object
-    root = ElemIndex(-1)
+    roots: seq[ElemIndex]  # Support multiple roots for layered UI
     elems*: seq[Elem]
     drawElem: DrawElemProc
     measureText: MeasureTextProc
@@ -253,7 +255,7 @@ proc begin*(ui: var UI) =
   for elem in ui.elems:
     if ui.widgets.contains(elem.id):
       ui.widgets[elem.id].box = elem.box
-  ui.root = ElemIndex(-1)
+  ui.roots.setLen(0)
   ui.elems.setLen(0)
 
 proc hasDraw*(ui: var UI): bool =
@@ -276,8 +278,9 @@ iterator items*(ui: var UI, elem: ElemIndex): ElemIndex =
     yield child
 
 iterator items*(ui: var UI): ElemIndex =
-  for child in ui.items(ui.root):
-    yield child
+  for root in ui.roots:
+    for child in ui.items(root):
+      yield child
 
 proc createElem*(ui: var UI): ElemIndex =
   ui.elems.add(Elem(id: ElemId($genOid())))
@@ -287,7 +290,7 @@ proc beginElem*(ui: var UI, elem: Elem, parent = ElemIndex(-1)): ElemIndex =
   result = ui.createElem()
   ui[result] = elem
   if parent.int == -1:
-    ui.root = result
+    ui.roots.add(result)
 
 proc add*(ui: var UI, parent, child: ElemIndex) =
   ui.get(parent).children.add(child)
@@ -375,7 +378,8 @@ proc updateGrowContainer*(ui: var UI, elemIndex: ElemIndex) =
   let padding = w.style.padding * 2
   var layoutChildCount = 0
   for child in ui.items(elemIndex):
-    if not ui.get(child).floating:
+    let childElem = ui.get(child)
+    if not childElem.floating and not childElem.absolute:
       inc layoutChildCount
   let gapTotal = gap * max(layoutChildCount - 1, 0)
 
@@ -543,7 +547,8 @@ proc updateLayout*(ui: var UI, elemIndex: ElemIndex) =
   let gap = w.style.gap
   var layoutChildCount = 0
   for child in ui.items(elemIndex):
-    if not ui.get(child).floating:
+    let childElem = ui.get(child)
+    if not childElem.floating and not childElem.absolute:
       inc layoutChildCount
   var childIndexCounter = 0
 
@@ -551,6 +556,16 @@ proc updateLayout*(ui: var UI, elemIndex: ElemIndex) =
     let childIndex = child
     let childElem = ui.get(childIndex)
     let isFloating = childElem.floating
+    let isAbsolute = childElem.absolute
+
+    # Absolute positioned elements use their pos field
+    if isAbsolute:
+      ui.get(childIndex).box.x = childElem.pos.x
+      ui.get(childIndex).box.y = childElem.pos.y
+      ui.updateLayout(childIndex)
+      continue
+
+    # Normal flow layout
     if w.dir == Row:
       ui.get(childIndex).box.x = cursorX
       ui.get(childIndex).box.y = contentStartY
@@ -595,14 +610,16 @@ proc updateLayout*(ui: var UI, elemIndex: ElemIndex) =
 proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
   if ui.elems.len == 0:
     return
-  ui.get(ui.root).box = container
-  ui.get(ui.root).size = (
-    #
-    w: Sizing(kind: Fixed, min: container.w, max: container.w),
-    h: Sizing(kind: Fixed, min: container.h, max: container.h),
-  )
-  ui.updateGrowContainer(ui.root)
-  ui.updateLayout(ui.root)
+
+  # Layout all roots with the same container bounds
+  for root in ui.roots:
+    ui.get(root).box = container
+    ui.get(root).size = (
+      w: Sizing(kind: Fixed, min: container.w, max: container.w),
+      h: Sizing(kind: Fixed, min: container.h, max: container.h),
+    )
+    ui.updateGrowContainer(root)
+    ui.updateLayout(root)
 
   ui.hotElemId = none(ElemId)
   for e in ui.elems:
@@ -725,7 +742,9 @@ proc draw*(ui: var UI, elemIndex: ElemIndex) =
 proc draw*(ui: var UI) =
   if ui.elems.len == 0:
     return
-  ui.draw(ui.root)
+  # Draw all roots in order (first root = bottom layer, last root = top layer)
+  for root in ui.roots:
+    ui.draw(root)
 
 proc layoutToString*(ui: UI): string =
   proc findParent(child: ElemIndex): int =
