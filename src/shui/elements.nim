@@ -71,7 +71,7 @@ type
     textAlign*: Align
     border*: int
     box*: tuple[x, y, w, h: int]
-    children: seq[ElemIndex]
+    children*: seq[ElemIndex]
 
   ElemIndex* = distinct int
 
@@ -107,7 +107,7 @@ type
     drawCalls*: int
 
   UI* = object
-    roots: seq[ElemIndex]  # Support multiple roots for layered UI
+    roots*: seq[ElemIndex]  # Support multiple roots for layered UI
     elems*: seq[Elem]
     drawElem: DrawElemProc
     measureText: MeasureTextProc
@@ -896,3 +896,28 @@ Draw Calls: {ui.debug.drawCalls}""")
       echo fmt"\n--- Root {i} (Element {root.int}) ---"
       ui.logLayoutInfo(root, 0)
     echo "======================================\n"
+
+# Box API - Convenience functions for widget box management
+proc getBox*(ui: UI, id: ElemId): tuple[x, y, w, h: int] =
+  ## Get the bounding box for a widget by ID
+  ## Returns (0, 0, 0, 0) if box doesn't exist
+  if ui.boxes.hasKey(id):
+    return ui.boxes[id]
+  else:
+    return (x: 0, y: 0, w: 0, h: 0)
+
+proc setBox*(ui: var UI, id: ElemId, box: tuple[x, y, w, h: int]) =
+  ## Set the bounding box for a widget
+  ui.boxes[id] = box
+
+proc setBox*(ui: var UI, id: ElemId, x, y, w, h: int) =
+  ## Set the bounding box for a widget (individual parameters)
+  ui.boxes[id] = (x: x, y: y, w: w, h: h)
+
+proc hasBox*(ui: UI, id: ElemId): bool =
+  ## Check if a widget box exists
+  ui.boxes.hasKey(id)
+
+proc removeBox*(ui: var UI, id: ElemId) =
+  ## Remove a widget box
+  ui.boxes.del(id)
