@@ -169,61 +169,7 @@ elem:
 
 ### Stateful Widgets
 
-The `widget` macro creates reusable components with local state and signals:
-
-```nim
-import shui
-
-widget Counter:
-  state:
-    count: int = 0
-
-  signals:
-    onIncrement()
-    onDecrement()
-
-  render():
-    elem:
-      size = (w: Fit, h: Fit)
-      dir = Col
-      align = Center
-      style = style(bg = color(0.2, 0.2, 0.3), padding = 10, gap = 5)
-
-      elem:
-        text = "Count: " & $state.count
-        size = (w: Grow, h: Fit)
-
-      elem:
-        size = (w: Grow, h: Fit)
-        dir = Row
-        style = style(gap = 5)
-
-        button("−", ElemId"dec-btn"):
-          onClick:
-            state.count -= 1
-            emit onDecrement
-
-        button("+", ElemId"inc-btn"):
-          onClick:
-            state.count += 1
-            emit onIncrement
-
-# Usage
-var counter = Counter()
-
-# Connect to signals
-counter.onIncrement.connect(proc() =
-  echo "Incremented!"
-)
-
-ui.begin()
-counter.render()
-ui.updateLayout((0, 0, 800, 600))
-```
-
-### Widget with Events
-
-Widgets can define custom events for internal logic:
+The `widget` macro creates reusable components with local state and events:
 
 ```nim
 widget TodoList:
@@ -277,36 +223,41 @@ widget TodoList:
 
 ### Handling Child Widget Events
 
-Parent widgets can connect to child widget signals in the `init` section:
+Parent widgets can handle child widget events using the `handle:` section:
 
 ```nim
 widget CounterButton:
   state:
     count: int = 0
+    label: string = "Click"
 
-  signals:
-    onClick()
+  event:
+    Clicked
 
   render():
-    button("Count: " & $state.count, ElemId"counter-btn"):
+    button(state.label & ": " & $state.count, ElemId(state.label)):
       onClick:
         state.count += 1
-        emit onClick
+        emit Clicked
 
 widget App:
   state:
     totalClicks: int = 0
-    counter1: CounterButton
-    counter2: CounterButton
+    counter1 = CounterButton(label: "Button 1")
+    counter2 = CounterButton(label: "Button 2")
 
-  init:
-    # Connect to child widget signals
-    state.counter1.onClick.connect(proc() =
+  event:
+    TotalIncremented
+
+  handle:
+    # Handle events from child widgets
+    onEvent(state.counter1, Clicked):
       state.totalClicks += 1
-    )
-    state.counter2.onClick.connect(proc() =
+      emit TotalIncremented
+
+    onEvent(state.counter2, Clicked):
       state.totalClicks += 1
-    )
+      emit TotalIncremented
 
   render():
     elem:
@@ -562,9 +513,9 @@ while running:
 ### Widget Sections
 
 - `state:` - Define widget state fields
-- `signals:` - Define outgoing signals
 - `event:` - Define custom event types
-- `handle(evt):` - Handle custom events
+- `handle(evt):` - Handle this widget's own events
+- `handle:` - Handle child widget events
 - `init:` - Initialization code
 - `render():` - Render function
 
