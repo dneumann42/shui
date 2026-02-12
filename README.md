@@ -4,15 +4,16 @@ A headless immediate-mode UI library with flexbox-style layout.
 
 ## What is Shui?
 
-Shui is a simple UI library that handles layout, input, and widget state without rendering. You provide the paint functions, Shui provides the structure. It uses an immediate-mode API where you rebuild your UI every frame.
+Shui is a UI library that handles layout, input, and widget state without rendering. You provide the paint functions, Shui provides the structure. It uses an immediate-mode API where you rebuild your UI every frame.
 
 ## Features
 
+- Declarative DSL with the `elem` and `widget` macros
 - Immediate-mode API
 - Flexbox-style layout (Row/Column, Fixed/Fit/Grow sizing)
 - Headless (renderer-agnostic)
 - Multiple UI roots for layered interfaces
-- Widget state management
+- Widget state management with signals
 - Absolute and floating positioning
 - Input handling (mouse, keyboard, scroll)
 - Compile-time debug mode
@@ -29,7 +30,7 @@ requires "chroma"  # For colors
 ### Setup
 
 ```nim
-import shui/elements
+import shui
 
 # Set your painter type (once, at startup)
 type MyPainter = object
@@ -41,117 +42,235 @@ setPainterType(MyPainter)
 var ui = UI()
 ```
 
-### Build UI Each Frame
+### Build UI with the DSL
+
+The `elem` macro provides a clean declarative syntax:
 
 ```nim
 ui.begin()  # Start frame
 
-let root = ui.beginElem(Elem(
-  size: (
-    w: Sizing(kind: Grow),
-    h: Sizing(kind: Grow)
-  ),
-  dir: Col
-))
+elem:
+  size = (w: Grow, h: Grow)
+  dir = Col
+  style = style(bg = color(0.2, 0.2, 0.3), padding = 10)
 
-# Add children...
+  # Header
+  elem:
+    size = (w: Grow, h: Fixed)
+    text = "My App"
+    style = style(padding = 5)
 
-ui.updateLayout((0, 0, 800, 600))  # Layout with viewport size
+  # Content
+  elem:
+    size = (w: Grow, h: Grow)
+    dir = Row
+    style = style(gap = 8)
+
+    # Left panel
+    elem:
+      size = (w: Fixed, h: Grow)
+      style = style(bg = color(0.3, 0.3, 0.4))
+
+    # Right panel
+    elem:
+      size = (w: Grow, h: Grow)
+      style = style(bg = color(0.25, 0.25, 0.35))
+
+ui.updateLayout((0, 0, 800, 600))
 ```
 
 ### Sizing Modes
 
 ```nim
-# Fixed: Exact size
-Sizing(kind: Fixed, min: 100, max: 100)
+# Fixed: Exact size (defaults to max value if not specified)
+size = (w: Fixed, h: Fixed)  # Uses min/max from parent context
 
 # Fit: Size to content
-Sizing(kind: Fit)
+size = (w: Fit, h: Fit)
 
 # Grow: Fill available space
-Sizing(kind: Grow)
+size = (w: Grow, h: Grow)
+
+# Mixed
+size = (w: Fixed, h: Grow)
 ```
 
 ### Layout Example
 
 ```nim
-import shui/elements
+import shui
 
 var ui = UI()
 ui.begin()
 
-# Container
-let container = ui.beginElem(Elem(
-  size: (
-    w: Sizing(kind: Fixed, min: 400, max: 400),
-    h: Sizing(kind: Fixed, min: 300, max: 300)
-  ),
-  dir: Col,
-  style: Style(
-    bg: rgb(40, 40, 40),
-    padding: 10,
-    gap: 5
+elem:
+  size = (w: Fixed, h: Fixed)
+  dir = Col
+  align = Center
+  crossAlign = Center
+  style = style(
+    bg = color(0.15, 0.15, 0.2),
+    padding = 10,
+    gap = 5
   )
-))
 
-# Header (fixed height)
-let header = ui.beginElem(Elem(
-  size: (
-    w: Sizing(kind: Grow),
-    h: Sizing(kind: Fixed, min: 50, max: 50)
-  ),
-  text: "Header",
-  style: Style(bg: rgb(60, 60, 60))
-), container)
-ui.add(container, header)
+  # Header
+  elem:
+    size = (w: Grow, h: Fit)
+    text = "Header"
+    style = style(bg = color(0.2, 0.2, 0.3), padding = 8)
 
-# Content (grows to fill space)
-let content = ui.beginElem(Elem(
-  size: (
-    w: Sizing(kind: Grow),
-    h: Sizing(kind: Grow)
-  ),
-  text: "Content",
-  style: Style(bg: rgb(50, 50, 50))
-), container)
-ui.add(container, content)
+  # Content area
+  elem:
+    size = (w: Grow, h: Grow)
+    dir = Row
+    style = style(gap = 10)
 
-# Footer (fixed height)
-let footer = ui.beginElem(Elem(
-  size: (
-    w: Sizing(kind: Grow),
-    h: Sizing(kind: Fixed, min: 30, max: 30)
-  ),
-  text: "Footer",
-  style: Style(bg: rgb(60, 60, 60))
-), container)
-ui.add(container, footer)
+    # Sidebar
+    elem:
+      size = (w: Fixed, h: Grow)
+      style = style(bg = color(0.18, 0.18, 0.25))
+
+    # Main content
+    elem:
+      size = (w: Grow, h: Grow)
+      style = style(bg = color(0.22, 0.22, 0.3))
+
+  # Footer
+  elem:
+    size = (w: Grow, h: Fit)
+    text = "Footer"
+    style = style(bg = color(0.2, 0.2, 0.3), padding = 8)
 
 ui.updateLayout((0, 0, 800, 600))
 ```
 
-### Widget State
-
-Widgets can store state across frames using unique IDs:
+### Buttons with onClick
 
 ```nim
-type ButtonState = ref object
-  clickCount: int
+import shui
 
-let buttonId = ElemId("my-button")
+elem:
+  size = (w: Grow, h: Grow)
+  dir = Col
+  align = Center
 
-# Get or create state
-if not ui.hasState(buttonId):
-  ui.setState(buttonId, ButtonState(clickCount: 0))
+  button("Click Me", ElemId"my-button"):
+    onClick:
+      echo "Button clicked!"
 
-var state = ui.getState(buttonId, ButtonState)
+  button("Toggle", ElemId"toggle-btn"):
+    toggle = On  # or Off
+    onClick:
+      echo "Toggled"
+```
 
-# Use widget box for hit testing
-if ui.hasBox(buttonId):
-  let box = ui.getBox(buttonId)
-  # Check if mouse is in box...
-  if clicked:
-    state.clickCount += 1
+### Stateful Widgets
+
+The `widget` macro creates reusable components with local state and signals:
+
+```nim
+import shui
+
+widget Counter:
+  state:
+    count: int = 0
+
+  signals:
+    onIncrement()
+    onDecrement()
+
+  render():
+    elem:
+      size = (w: Fit, h: Fit)
+      dir = Col
+      align = Center
+      style = style(bg = color(0.2, 0.2, 0.3), padding = 10, gap = 5)
+
+      elem:
+        text = "Count: " & $state.count
+        size = (w: Grow, h: Fit)
+
+      elem:
+        size = (w: Grow, h: Fit)
+        dir = Row
+        style = style(gap = 5)
+
+        button("−", ElemId"dec-btn"):
+          onClick:
+            state.count -= 1
+            emit onDecrement
+
+        button("+", ElemId"inc-btn"):
+          onClick:
+            state.count += 1
+            emit onIncrement
+
+# Usage
+var counter = Counter()
+
+# Connect to signals
+counter.onIncrement.connect(proc() =
+  echo "Incremented!"
+)
+
+ui.begin()
+counter.render()
+ui.updateLayout((0, 0, 800, 600))
+```
+
+### Widget with Events
+
+Widgets can define custom events for internal logic:
+
+```nim
+widget TodoList:
+  state:
+    items: seq[string] = @[]
+    inputText: string = ""
+
+  event:
+    AddItem
+    RemoveItem(index: int)
+    UpdateInput(text: string)
+
+  handle(evt):
+    case evt.kind
+    of AddItem:
+      state.items.add(state.inputText)
+      state.inputText = ""
+    of RemoveItem:
+      state.items.delete(evt.index)
+    of UpdateInput:
+      state.inputText = evt.text
+
+  render():
+    elem:
+      size = (w: Grow, h: Grow)
+      dir = Col
+      style = style(padding = 10, gap = 5)
+
+      # Input area
+      elem:
+        size = (w: Grow, h: Fit)
+        dir = Row
+        style = style(gap = 5)
+
+        # Text input would go here
+        button("Add", ElemId"add-btn"):
+          onClick:
+            emit AddItem
+
+      # Item list
+      for i, item in state.items:
+        elem:
+          size = (w: Grow, h: Fit)
+          dir = Row
+          text = item
+
+          button("X", ElemId("remove-" & $i)):
+            onClick:
+              emit RemoveItem(index: i)
 ```
 
 ### Input Handling
@@ -163,7 +282,7 @@ var input = BasicInput()
 input.mousePosition = (x: 100, y: 50)
 input.actionPressed = true
 
-# Check input in UI logic
+# Use in UI logic
 if input.actionPressed:
   echo "Action pressed"
 ```
@@ -171,15 +290,11 @@ if input.actionPressed:
 ### Absolute Positioning
 
 ```nim
-let overlay = ui.beginElem(Elem(
-  size: (
-    w: Sizing(kind: Fixed, min: 200, max: 200),
-    h: Sizing(kind: Fixed, min: 100, max: 100)
-  ),
-  absolute: true,
-  pos: (x: 50, y: 50),
-  style: Style(bg: rgb(100, 100, 200))
-))
+elem:
+  size = (w: Fixed, h: Fixed)
+  absolute = true
+  pos = (x: 50, y: 50)
+  style = style(bg = color(0.4, 0.4, 0.6))
 ```
 
 ### Multiple Roots
@@ -189,21 +304,21 @@ Multiple roots create layered interfaces:
 ```nim
 ui.begin()
 
-# Background UI
-let background = ui.beginElem(Elem(
-  size: (w: Sizing(kind: Grow), h: Sizing(kind: Grow))
-))
+# Background layer
+elem:
+  size = (w: Grow, h: Grow)
+  # Background UI here
 
-# Overlay UI (rendered on top)
-let overlay = ui.beginElem(Elem(
-  size: (w: Sizing(kind: Grow), h: Sizing(kind: Grow)),
-  absolute: true,
-  pos: (x: 0, y: 0)
-))
+# Overlay layer
+elem:
+  size = (w: Grow, h: Grow)
+  absolute = true
+  pos = (x: 0, y: 0)
+  # Overlay UI here
 
 ui.updateLayout((0, 0, 800, 600))
 
-# Iterate all roots
+# Render all roots
 for root in ui.roots:
   # Paint this root's tree
 ```
@@ -237,16 +352,13 @@ Track widget positions for hit testing:
 ```nim
 let id = ElemId("button")
 
-# Set box (usually after layout)
-ui.setBox(id, 10, 20, 100, 50)
-
-# Get box
+# Boxes are automatically tracked during layout
 if ui.hasBox(id):
   let box = ui.getBox(id)
-  echo box.x, ", ", box.y, ", ", box.w, ", ", box.h
-
-# Remove box
-ui.removeBox(id)
+  # Check if mouse is inside
+  let mouseInside =
+    mx >= box.x and mx < box.x + box.w and
+    my >= box.y and my < box.y + box.h
 ```
 
 ## Debug Mode
@@ -266,76 +378,166 @@ Debug mode adds:
 ## Style Properties
 
 ```nim
-Style(
-  bg: Color           # Background color
-  fg: Color           # Foreground/text color
-  borderColor: Color  # Border color
-  border: int         # Border width
-  padding: int        # Inner spacing
-  gap: int            # Space between children
-  borderRadius: float # Corner rounding
-  rotation: float     # Rotation in radians
+style(
+  bg = color(r, g, b, a)      # Background color
+  fg = color(r, g, b, a)      # Foreground/text color
+  borderColor = color(...)    # Border color
+  border = 2                  # Border width
+  padding = 10                # Inner spacing
+  gap = 8                     # Space between children
+  borderRadius = 0.05         # Corner rounding
+  rotation = 0.0              # Rotation in radians
 )
 ```
 
 ## Layout Properties
 
-- `dir: Direction` - Row or Col
-- `align: Align` - Start, Center, or End (main axis)
-- `crossAlign: Align` - Cross axis alignment
-- `textAlign: Align` - Text alignment
-
-## Example: Button Widget
+Inside `elem` blocks:
 
 ```nim
-import shui/elements
-import chroma
-
-proc button(ui: var UI, id: ElemId, label: string, x, y: int): bool =
-  type ButtonState = ref object
-    hovered: bool
-    pressed: bool
-
-  if not ui.hasState(id):
-    ui.setState(id, ButtonState())
-
-  var state = ui.getState(id, ButtonState)
-  let input = ui.input
-
-  # Create element
-  let elem = ui.beginElem(Elem(
-    size: (
-      w: Sizing(kind: Fixed, min: 120, max: 120),
-      h: Sizing(kind: Fixed, min: 40, max: 40)
-    ),
-    text: label,
-    style: Style(
-      bg: if state.pressed: rgb(80, 80, 80)
-          elif state.hovered: rgb(60, 60, 60)
-          else: rgb(50, 50, 50),
-      fg: rgb(255, 255, 255),
-      padding: 10
-    )
-  ))
-
-  # Store position for next frame
-  ui.setBox(id, x, y, 120, 40)
-
-  # Check hover and click
-  let box = ui.getBox(id)
-  let mx = input.mousePosition.x
-  let my = input.mousePosition.y
-
-  state.hovered = mx >= box.x and mx < box.x + box.w and
-                  my >= box.y and my < box.y + box.h
-  state.pressed = state.hovered and input.actionDown
-
-  result = state.hovered and input.actionPressed
-
-# Usage
-if ui.button(ElemId("play-btn"), "Play", 100, 100):
-  echo "Play button clicked"
+elem:
+  dir = Col              # or Row
+  align = Center         # Start, Center, End (main axis)
+  crossAlign = Start     # Cross axis alignment
+  textAlign = Center     # Text alignment
+  size = (w: Grow, h: Fit)
+  style = style(...)
 ```
+
+## Complete Example
+
+```nim
+import shui
+
+# Setup
+type MyPainter = object
+setPainterType(MyPainter)
+
+var ui = UI()
+
+# Define a counter widget
+widget AppWidget:
+  state:
+    count: int = 0
+    showOverlay: bool = false
+
+  render():
+    elem:
+      size = (w: Grow, h: Grow)
+      dir = Col
+      align = Center
+      crossAlign = Center
+      style = style(bg = color(0.1, 0.1, 0.15), padding = 20, gap = 10)
+
+      elem:
+        text = "Counter Example"
+        size = (w: Grow, h: Fit)
+        style = style(fg = color(1.0, 1.0, 1.0), padding = 10)
+
+      elem:
+        text = "Count: " & $state.count
+        size = (w: Grow, h: Fit)
+        style = style(fg = color(0.8, 0.8, 0.8))
+
+      elem:
+        size = (w: Fit, h: Fit)
+        dir = Row
+        style = style(gap = 5)
+
+        button("Decrement", ElemId"dec"):
+          onClick:
+            state.count -= 1
+
+        button("Increment", ElemId"inc"):
+          onClick:
+            state.count += 1
+
+        button("Reset", ElemId"reset"):
+          onClick:
+            state.count = 0
+
+      button("Toggle Overlay", ElemId"overlay-btn"):
+        toggle = (if state.showOverlay: On else: Off)
+        onClick:
+          state.showOverlay = not state.showOverlay
+
+    # Overlay
+    if state.showOverlay:
+      elem:
+        size = (w: Grow, h: Grow)
+        absolute = true
+        pos = (x: 0, y: 0)
+        style = style(bg = color(0.0, 0.0, 0.0, 0.7))
+        align = Center
+        crossAlign = Center
+
+        elem:
+          size = (w: Fixed, h: Fixed)
+          style = style(bg = color(0.2, 0.2, 0.3), padding = 20)
+          text = "Overlay Active"
+
+          button("Close", ElemId"close-overlay"):
+            onClick:
+              state.showOverlay = false
+
+# Main loop
+var app = AppWidget()
+
+while running:
+  # Handle events and update input
+  # ...
+
+  ui.begin()
+  app.render()
+  ui.updateLayout((0, 0, 800, 600))
+
+  # Render
+  for elem in ui.elems:
+    painter.paintElem(elem)
+```
+
+## API Reference
+
+### Core Macros
+
+- `elem: body` - Create an element with declarative syntax
+- `widget Name: ...` - Define a stateful widget
+- `button(text, id): ...` - Create a button with onClick handler
+
+### Widget Sections
+
+- `state:` - Define widget state fields
+- `signals:` - Define outgoing signals
+- `event:` - Define custom event types
+- `handle(evt):` - Handle custom events
+- `init:` - Initialization code
+- `render():` - Render function
+
+### Element Properties
+
+Set inside `elem` blocks using `=`:
+
+- `size` - `(w: SizingKind, h: SizingKind)`
+- `dir` - `Row` or `Col`
+- `align` - `Start`, `Center`, `End`
+- `crossAlign` - Cross axis alignment
+- `textAlign` - Text alignment
+- `text` - Element text content
+- `style` - Style properties
+- `absolute` - Absolute positioning flag
+- `pos` - `(x: int, y: int)` for absolute position
+- `floating` - Floating element flag
+- `scrollable` - Enable scrolling
+
+### UI Methods
+
+- `begin()` - Start new frame
+- `updateLayout(container)` - Compute layout
+- `hasBox(id): bool` - Check if widget has box
+- `getBox(id): tuple[x,y,w,h]` - Get widget position
+- `setState(id, state)` - Set widget state
+- `getState(id, Type): Type` - Get widget state
+- `hasState(id): bool` - Check if widget has state
 
 ## Performance
 
