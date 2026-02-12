@@ -1,5 +1,11 @@
-import std/[oids, sets, hashes, tables, options, macros]
+import std/[oids, sets, hashes, tables, options, macros, strformat]
 import chroma
+
+# Compile-time debug flag - set to true to enable debug visualization
+const shuiDebug* {.booldefine.} = false
+
+when shuiDebug:
+  import std/strutils
 
 type
   SizingKind* = enum
@@ -69,6 +75,9 @@ type
 
   ElemIndex* = distinct int
 
+proc `==`*(a, b: ElemIndex): bool {.borrow.}
+
+type
   Widget* = object
     box: tuple[x, y, w, h: int]
     focused = false
@@ -91,6 +100,12 @@ type
   DrawElemProc = proc(elem: Elem, phase: DrawPhase): void {.gcsafe.}
   MeasureTextProc = proc(text: string): tuple[w, h: int] {.gcsafe.}
 
+  DebugInfo* = object
+    elemCount*: int
+    rootCount*: int
+    layoutDepth*: int
+    drawCalls*: int
+
   UI* = object
     roots: seq[ElemIndex]  # Support multiple roots for layered UI
     elems*: seq[Elem]
@@ -100,6 +115,9 @@ type
     widgets*: Table[ElemId, Widget]
     widgetState: Table[ElemId, AbstractWidgetState]
     boxes*: Table[ElemId, tuple[x, y, w, h: int]]
+
+    when shuiDebug:
+      debug*: DebugInfo
 
     input*: BasicInput
 
@@ -258,6 +276,12 @@ proc begin*(ui: var UI) =
   ui.roots.setLen(0)
   ui.elems.setLen(0)
 
+  when shuiDebug:
+    ui.debug.elemCount = 0
+    ui.debug.rootCount = 0
+    ui.debug.layoutDepth = 0
+    ui.debug.drawCalls = 0
+
 proc hasDraw*(ui: var UI): bool =
   ui.drawElem.isNil == false
 
@@ -286,11 +310,18 @@ proc createElem*(ui: var UI): ElemIndex =
   ui.elems.add(Elem(id: ElemId($genOid())))
   result = ElemIndex(ui.elems.len - 1)
 
+  when shuiDebug:
+    ui.debug.elemCount += 1
+    echo fmt"[Shui Debug] Created elem {result.int}: {ui.elems[^1].id}"
+
 proc beginElem*(ui: var UI, elem: Elem, parent = ElemIndex(-1)): ElemIndex =
   result = ui.createElem()
   ui[result] = elem
   if parent.int == -1:
     ui.roots.add(result)
+    when shuiDebug:
+      ui.debug.rootCount += 1
+      echo fmt"[Shui Debug] Added root {result.int} (total roots: {ui.debug.rootCount})"
 
 proc add*(ui: var UI, parent, child: ElemIndex) =
   ui.get(parent).children.add(child)
@@ -745,6 +776,8 @@ proc draw*(ui: var UI) =
   # Draw all roots in order (first root = bottom layer, last root = top layer)
   for root in ui.roots:
     ui.draw(root)
+    when shuiDebug:
+      ui.debug.drawCalls += 1
 
 proc layoutToString*(ui: UI): string =
   proc findParent(child: ElemIndex): int =
@@ -772,3 +805,94 @@ proc writeLayout*(ui: UI, path: string) =
   defer:
     file.close()
   file.write(ui.layoutToString())
+
+# ==================== Debug Visualization ====================
+
+when shuiDebug:
+  type
+    DebugDrawProc* = proc(x, y, w, h: int, color: Color, text: string = "") {.gcsafe.}
+
+  var gDebugDrawProc: DebugDrawProc = nil
+
+  proc setDebugDrawProc*(fn: DebugDrawProc) =
+    ## Set the drawing function for debug visualization
+    gDebugDrawProc = fn
+
+  proc getSizingKindStr(s: Sizing): string =
+    case s.kind
+    of Fixed: fmt"Fixed({s.min})"
+    of Fit: "Fit"
+    of Grow: "Grow"
+
+  proc drawDebugOverlay*(ui: var UI) =
+    ## Draw debug visualization over the UI
+    ## Call this after ui.draw() to see debug info
+    if gDebugDrawProc.isNil:
+      return
+
+    # Draw stats in top-left corner
+    gDebugDrawProc(5, 5, 200, 80, color(0.0, 0.0, 0.0, 0.8),
+      fmt"""Shui Debug Stats:
+Elements: {ui.debug.elemCount}
+Roots: {ui.debug.rootCount}
+Draw Calls: {ui.debug.drawCalls}""")
+
+    # Draw all element boundaries
+    for i, elem in ui.elems:
+      let box = elem.box
+      var debugColor = color(0.0, 1.0, 0.0, 0.4)  # Green for normal elements
+      var label = fmt"#{i}"
+
+      # Color code by type
+      if elem.floating:
+        debugColor = color(1.0, 0.65, 0.0, 0.4)  # Orange for floating
+        label &= " [Float]"
+      elif elem.absolute:
+        debugColor = color(1.0, 0.0, 1.0, 0.4)  # Magenta for absolute
+        label &= fmt" [Abs:{elem.pos.x},{elem.pos.y}]"
+
+      # Color code roots specially
+      if ElemIndex(i) in ui.roots:
+        debugColor = color(1.0, 1.0, 0.0, 0.6)  # Yellow for roots
+        label = fmt"ROOT {i}"
+
+      # Draw box outline and info
+      let sizeInfo = fmt"{getSizingKindStr(elem.size.w)} x {getSizingKindStr(elem.size.h)}"
+      let boxInfo = fmt"{box.w}x{box.h} @ ({box.x},{box.y})"
+      gDebugDrawProc(box.x, box.y, box.w, box.h, debugColor, fmt"{label}\n{sizeInfo}\n{boxInfo}")
+
+  proc logLayoutInfo*(ui: UI, elemIndex: ElemIndex, depth: int = 0) =
+    ## Recursively log layout tree structure
+    let elem = ui.elems[elemIndex.int]
+    let indent = repeat("  ", depth)
+    let box = elem.box
+    
+    var flags = newSeq[string]()
+    if elem.floating: flags.add("float")
+    if elem.absolute: flags.add(fmt"abs:{elem.pos.x},{elem.pos.y}")
+    if ElemIndex(elemIndex.int) in ui.roots: flags.add("ROOT")
+    
+    let flagStr = if flags.len > 0: " [" & flags.join(", ") & "]" else: ""
+    
+    echo fmt"{indent}Elem {elemIndex.int}{flagStr}:"
+    echo fmt"{indent}  Size: {getSizingKindStr(elem.size.w)} x {getSizingKindStr(elem.size.h)}"
+    echo fmt"{indent}  Box: {box.w}x{box.h} @ ({box.x},{box.y})"
+    echo fmt"{indent}  Style: dir={elem.dir}, align={elem.align}, gap={elem.style.gap}"
+    
+    if elem.text.len > 0:
+      echo fmt"{indent}  Text: '{elem.text}'"
+    
+    if elem.children.len > 0:
+      echo fmt"{indent}  Children: {elem.children.len}"
+      for child in elem.children:
+        ui.logLayoutInfo(child, depth + 1)
+
+  proc dumpLayoutTree*(ui: UI) =
+    ## Dump entire layout tree to console
+    echo "\n========== Shui Layout Tree =========="
+    echo fmt"Total Elements: {ui.elems.len}"
+    echo fmt"Roots: {ui.roots.len}"
+    for i, root in ui.roots:
+      echo fmt"\n--- Root {i} (Element {root.int}) ---"
+      ui.logLayoutInfo(root, 0)
+    echo "======================================\n"
