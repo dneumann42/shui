@@ -520,33 +520,19 @@ macro widget*(args: varargs[untyped]): untyped =
       renderProcBody.add(handleBlock)
 
     # Build render proc or template
-    if hasChildrenSlot:
-      # Generate as template for children slot support
-      # Use dirty pragma to avoid hygiene issues with elem syntax
-      result.add(
-        nnkTemplateDef.newTree(
-          nnkPostfix.newTree(ident("*"), renderProcName),
-          newEmptyNode(),  # term rewriting
-          newEmptyNode(),  # generic params
-          procParams,
-          nnkPragma.newTree(ident("dirty")),  # dirty pragma
-          newEmptyNode(),  # reserved
-          renderProcBody
-        )
+    # Always generate as dirty template to allow access to ui from calling scope
+    # This is necessary because elem blocks and other shui macros expect ui to be available
+    result.add(
+      nnkTemplateDef.newTree(
+        nnkPostfix.newTree(ident("*"), renderProcName),
+        newEmptyNode(),  # term rewriting
+        newEmptyNode(),  # generic params
+        procParams,
+        nnkPragma.newTree(ident("dirty")),  # dirty pragma
+        newEmptyNode(),  # reserved
+        renderProcBody
       )
-    else:
-      # Generate as proc
-      result.add(
-        nnkProcDef.newTree(
-          nnkPostfix.newTree(ident("*"), renderProcName),
-          newEmptyNode(),
-          newEmptyNode(),
-          procParams,
-          nnkPragma.newTree(ident("gcsafe")),
-          newEmptyNode(),
-          renderProcBody
-        )
-      )
+    )
 
   # 4. Generate init proc if init section exists
   if initSection != nil and initSection.len >= 2:

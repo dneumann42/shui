@@ -741,6 +741,7 @@ macro label*(text: string, blk: untyped) =
       ui.get(elemIndex).style = style(
         fg = color(1.0, 1.0, 1.0, 1.0)
       )
+      ui.get(elemIndex).size = (w: Fit, h: Fit)  # Default size for labels
       `newBlk`
       ui.endElem(parent, elemIndex)
 

@@ -5,3 +5,6 @@ tests/test_macros
 *.out
 tests/twidgets
 tests/test_all
+nimble.develop
+nimble.paths
+nimbledeps
