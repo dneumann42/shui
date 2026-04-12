@@ -11,7 +11,7 @@ macro windowPanel*(w, h: int, title: string, id: ElemId, blk: untyped) =
       let fn = blk[i][1]
       blk[i] = nnkStmtList.newTree()
       onClick = quote:
-        if ElemId("window-back-btn").pressed(ui):
+        if ElemId("window-back-btn").clicked(ui):
           `fn`
       closeBtn = quote:
         button("X", ElemId"window-back-btn"):

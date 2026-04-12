@@ -25,12 +25,12 @@ macro lineInput*(text: var string, id: ElemId, blk: untyped) =
         ui.input.textInput = ""
       if ui.input.backspacePressed and `text`.len > 0:
         `text` = `text`[0..^2]
-      if `id`.pressed(ui) or ui.input.enterPressed or ui.input.tabPressed:
+      if `id`.clicked(ui) or ui.input.enterPressed or ui.input.tabPressed:
         `id`.unfocus(ui)
       if not `id`.hot(ui) and ui.input.actionPressed:
         `id`.unfocus(ui)
     else:
-      if `id`.pressed(ui):
+      if `id`.clicked(ui):
         `id`.focus(ui)
     block:
       var bgCol =
@@ -88,10 +88,10 @@ macro comboBox*(value {.inject.}: var string, id {.inject.}: ElemId, blk: untype
     ui.registerWidget(`id`)
 
     if focused:
-      if `id`.pressed(ui) or ui.input.enterPressed or ui.input.tabPressed:
+      if `id`.clicked(ui) or ui.input.enterPressed or ui.input.tabPressed:
         `id`.unfocus(ui)
     else:
-      if `id`.pressed(ui):
+      if `id`.clicked(ui):
         `id`.focus(ui)
 
     block:
@@ -161,7 +161,7 @@ macro comboBox*(value {.inject.}: var string, id {.inject.}: ElemId, blk: untype
 macro keyValueOption*(key, descr: string) =
   quote:
     let key = ElemId(`key`)
-    if key.pressed(ui):
+    if key.clicked(ui):
       value = `key`
       comboBoxId.unfocus(ui)
     ui.registerWidget(key)

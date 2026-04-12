@@ -38,7 +38,7 @@ macro button*(text: string, id: ElemId, blk: untyped) =
       let fn = blk[i][1]
       blk[i] = nnkStmtList.newTree()
       onClick = quote:
-        if `id`.pressed(ui):
+        if `id`.clicked(ui):
           `fn`
 
   # Generate the toggle check expression

@@ -430,8 +430,12 @@ macro widget*(args: varargs[untyped]): untyped =
 
     # Add container template for auto-parenting child widgets
     let containerTemplate = quote do:
+      let containerParent = when compiles(elemIndex):
+        elemIndex
+      else:
+        ui.currentParent()
       template container(body: untyped) =
-        ui.withParent(elemIndex):
+        ui.withParent(containerParent):
           body
     renderProcBody.add(containerTemplate)
 

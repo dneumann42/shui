@@ -124,6 +124,8 @@ type
     blinkTimer*: float
     blinkTicker*: int
     hotElemId*: Option[ElemId]
+    activeElemId*: Option[ElemId]
+    clickedElemId*: Option[ElemId]
 
     # Parent stack for preserving element hierarchy across proc calls
     parentStack: seq[ElemIndex]
@@ -207,19 +209,38 @@ proc registerWidget*(ui: var UI, eid: ElemId) =
     return
   ui.widgets[eid] = Widget()
 
-proc hot*(eid: ElemId, ui: UI): bool =
+proc widgetHot(ui: UI; eid: ElemId): bool =
   if not ui.widgets.contains(eid):
     return false
   let (x, y, w, h) = ui.widgets[eid].box
   let (mx, my) = ui.input.mousePosition
-  result = mx > x and mx < x + w and my > y and my < y + h
+  mx > x and mx < x + w and my > y and my < y + h
 
-proc pressed*(eid: ElemId, ui: var UI): bool =
+proc refreshHotElem*(ui: var UI) =
+  ui.hotElemId = none(ElemId)
+
+  if ui.elems.len > 0:
+    for e in ui.elems:
+      if ui.widgetHot(e.id):
+        ui.hotElemId = some(e.id)
+    return
+
+  for eid in ui.widgets.keys:
+    if ui.widgetHot(eid):
+      ui.hotElemId = some(eid)
+
+proc hot*(eid: ElemId, ui: UI): bool =
+  ui.widgetHot(eid)
+
+proc clicked*(eid: ElemId, ui: var UI): bool =
   if not ui.widgets.contains(eid):
     return false
-  result = eid.hot(ui) and ui.input.actionPressed
+  result = ui.clickedElemId.isSome and ui.clickedElemId.get() == eid
   if result:
-    ui.input.actionPressed = false
+    ui.clickedElemId = none(ElemId)
+
+proc pressed*(eid: ElemId, ui: var UI): bool =
+  eid.clicked(ui)
 
 proc focused*(eid: ElemId, ui: var UI): bool =
   if ui.widgets.contains(eid):
@@ -236,7 +257,24 @@ proc unfocus*(eid: ElemId, ui: var UI) =
 proc down*(eid: ElemId, ui: var UI): bool =
   if not ui.widgets.contains(eid):
     return false
-  result = eid.hot(ui) and ui.input.actionDown
+  result =
+    ui.input.actionDown and
+    ui.activeElemId.isSome and
+    ui.activeElemId.get() == eid and
+    eid.hot(ui)
+
+proc setActionButtonState*(ui: var UI; down: bool) =
+  if down and not ui.input.actionDown:
+    ui.input.actionPressed = true
+    ui.refreshHotElem()
+    ui.activeElemId = ui.hotElemId
+  elif not down and ui.input.actionDown:
+    ui.refreshHotElem()
+    if ui.activeElemId.isSome and ui.hotElemId.isSome and ui.activeElemId.get() == ui.hotElemId.get():
+      ui.clickedElemId = ui.activeElemId
+    ui.activeElemId = none(ElemId)
+
+  ui.input.actionDown = down
 
 proc color*(r, g, b: SomeFloat, a: SomeFloat = 1.0): Color =
   result = Color(r: r.float32, g: g.float32, b: b.float32, a: a.float32)
