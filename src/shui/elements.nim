@@ -71,6 +71,7 @@ type
     textAlign*: Align
     border*: int
     box*: tuple[x, y, w, h: int]
+    clipBox*: tuple[x, y, w, h: int]
     children*: seq[ElemIndex]
 
   ElemIndex* = distinct int
@@ -115,6 +116,7 @@ type
     widgets*: Table[ElemId, Widget]
     widgetState: Table[ElemId, AbstractWidgetState]
     boxes*: Table[ElemId, tuple[x, y, w, h: int]]
+    clips*: Table[ElemId, tuple[x, y, w, h: int]]
 
     when shuiDebug:
       debug*: DebugInfo
@@ -212,7 +214,19 @@ proc registerWidget*(ui: var UI, eid: ElemId) =
 proc widgetHot(ui: UI; eid: ElemId): bool =
   if not ui.widgets.contains(eid):
     return false
-  let (x, y, w, h) = ui.widgets[eid].box
+  var (x, y, w, h) = ui.widgets[eid].box
+  if ui.clips.hasKey(eid):
+    let clip = ui.clips[eid]
+    let x1 = max(x, clip.x)
+    let y1 = max(y, clip.y)
+    let x2 = min(x + w, clip.x + clip.w)
+    let y2 = min(y + h, clip.y + clip.h)
+    x = x1
+    y = y1
+    w = max(x2 - x1, 0)
+    h = max(y2 - y1, 0)
+  if w <= 0 or h <= 0:
+    return false
   let (mx, my) = ui.input.mousePosition
   mx > x and mx < x + w and my > y and my < y + h
 
@@ -263,6 +277,11 @@ proc down*(eid: ElemId, ui: var UI): bool =
     ui.activeElemId.get() == eid and
     eid.hot(ui)
 
+proc active*(eid: ElemId, ui: UI): bool =
+  if not ui.widgets.contains(eid):
+    return false
+  ui.activeElemId.isSome and ui.activeElemId.get() == eid
+
 proc setActionButtonState*(ui: var UI; down: bool) =
   if down and not ui.input.actionDown:
     ui.input.actionPressed = true
@@ -283,8 +302,8 @@ proc color*(v: SomeFloat): Color =
   result = Color(r: v, g: v, b: v, a: 1.0)
 
 proc style*(
-  bg = color(0.0),
-  fg = color(0.0),
+  bg = color(0.0, 0.0, 0.0, 0.0),
+  fg = color(1.0),
   borderColor = color(0.0),
   border = 0,
   padding = 0,
@@ -319,6 +338,59 @@ proc begin*(ui: var UI) =
     ui.debug.rootCount = 0
     ui.debug.layoutDepth = 0
     ui.debug.drawCalls = 0
+
+proc intersectRect(
+  a, b: tuple[x, y, w, h: int]
+): tuple[x, y, w, h: int] =
+  let x1 = max(a.x, b.x)
+  let y1 = max(a.y, b.y)
+  let x2 = min(a.x + a.w, b.x + b.w)
+  let y2 = min(a.y + a.h, b.y + b.h)
+  (
+    x: x1,
+    y: y1,
+    w: max(x2 - x1, 0),
+    h: max(y2 - y1, 0)
+  )
+
+proc contentClipBox(elem: Elem): tuple[x, y, w, h: int] =
+  let pad = elem.style.padding
+  (
+    x: elem.box.x + pad,
+    y: elem.box.y + pad,
+    w: max(elem.box.w - pad * 2, 0),
+    h: max(elem.box.h - pad * 2, 0)
+  )
+
+proc updateClipBoxes(
+  ui: var UI;
+  elemIndex: ElemIndex;
+  inheritedClip: Option[tuple[x, y, w, h: int]]
+) =
+  let elem = ui.elems[elemIndex.int]
+  let effectiveClip =
+    if inheritedClip.isSome:
+      intersectRect(elem.box, inheritedClip.get())
+    else:
+      elem.box
+
+  ui.elems[elemIndex.int].clipBox = effectiveClip
+  ui.clips[elem.id] = effectiveClip
+
+  let childClip =
+    if elem.stopClip:
+      none(tuple[x, y, w, h: int])
+    elif elem.clipOverflow or elem.scrollable:
+      let baseClip = contentClipBox(elem)
+      if inheritedClip.isSome:
+        some(intersectRect(baseClip, inheritedClip.get()))
+      else:
+        some(baseClip)
+    else:
+      inheritedClip
+
+  for child in ui.elems[elemIndex.int].children:
+    ui.updateClipBoxes(child, childClip)
 
 proc hasDraw*(ui: var UI): bool =
   ui.drawElem.isNil == false
@@ -710,6 +782,10 @@ proc updateLayout*(ui: var UI, container: tuple[x, y, w, h: int]) =
 
     ui.updateGrowContainer(root)
     ui.updateLayout(root)
+
+  ui.clips.clear()
+  for root in ui.roots:
+    ui.updateClipBoxes(root, none(tuple[x, y, w, h: int]))
 
   ui.hotElemId = none(ElemId)
   for e in ui.elems:
