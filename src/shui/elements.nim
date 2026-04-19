@@ -34,6 +34,37 @@ type
     borderRadius* = 0.0
     rotation* = 0.0  # Rotation in radians
 
+  PanelTheme* = object
+    bg*, border*, titleFg*: Color
+    borderWidth*, padding*, gap*: int
+
+  ButtonTheme* = object
+    bg*, hotBg*, downBg*, disabledBg*: Color
+    fg*, disabledFg*: Color
+    border*, hotBorder*, downBorder*, disabledBorder*: Color
+    borderWidth*, padding*, minWidth*, maxWidth*, height*: int
+    borderRadius*: float
+
+  InputTheme* = object
+    bg*, hotBg*, downBg*, disabledBg*: Color
+    fg*, disabledFg*, placeholderFg*, caretFg*, border*: Color
+    borderWidth*, padding*, minWidth*, maxWidth*, minHeight*, maxHeight*: int
+    borderRadius*: float
+
+  ListTheme* = object
+    bg*, border*: Color
+    rowBg*, rowHotBg*, rowDownBg*, rowSelectedBg*: Color
+    fg*, selectedFg*: Color
+    borderWidth*, padding*, gap*, rowHeight*: int
+    borderRadius*, rowBorderRadius*: float
+
+  UiTheme* = object
+    panel*: PanelTheme
+    button*: ButtonTheme
+    input*: InputTheme
+    list*: ListTheme
+    textFg*, accent*, accentHot*, accentDown*: Color
+
   Align* = enum
     Start
     Center
@@ -110,6 +141,7 @@ type
   UI* = object
     roots*: seq[ElemIndex]  # Support multiple roots for layered UI
     elems*: seq[Elem]
+    theme*: UiTheme
     drawElem: DrawElemProc
     measureText: MeasureTextProc
 
@@ -132,8 +164,12 @@ type
     # Parent stack for preserving element hierarchy across proc calls
     parentStack: seq[ElemIndex]
 
+proc defaultUiTheme*(): UiTheme {.gcsafe.}
+proc ensureTheme*(ui: var UI) {.gcsafe.}
+
 proc init*(T: typedesc[UI]): T =
-  T.default()
+  result = T.default()
+  result.theme = defaultUiTheme()
 
 proc pushParent*(ui: var UI, parent: ElemIndex) =
   ## Push a parent element onto the stack
@@ -207,6 +243,7 @@ proc get*(ui: UI, elemId: ElemId): Elem =
   raise newException(ValueError, "Failed to find element of ID: " & $elemId)
 
 proc registerWidget*(ui: var UI, eid: ElemId) =
+  ui.ensureTheme()
   if ui.widgets.contains(eid):
     return
   ui.widgets[eid] = Widget()
@@ -301,6 +338,78 @@ proc color*(r, g, b: SomeFloat, a: SomeFloat = 1.0): Color =
 proc color*(v: SomeFloat): Color =
   result = Color(r: v, g: v, b: v, a: 1.0)
 
+proc defaultUiTheme*(): UiTheme {.gcsafe.} =
+  UiTheme(
+    panel: PanelTheme(
+      bg: color(0.11, 0.08, 0.10, 0.94),
+      border: color(0.55, 0.10, 0.18, 0.95),
+      titleFg: color(0.98, 0.82, 0.86, 1.0),
+      borderWidth: 2,
+      padding: 14,
+      gap: 12
+    ),
+    button: ButtonTheme(
+      bg: color(0.50, 0.08, 0.16),
+      hotBg: color(0.72, 0.16, 0.27),
+      downBg: color(0.86, 0.20, 0.33),
+      disabledBg: color(0.20, 0.14, 0.16),
+      fg: color(1.0, 0.94, 0.96),
+      disabledFg: color(0.62, 0.52, 0.55),
+      border: color(0.74, 0.20, 0.31),
+      hotBorder: color(0.96, 0.42, 0.54),
+      downBorder: color(1.0, 0.58, 0.67),
+      disabledBorder: color(0.34, 0.20, 0.24),
+      borderWidth: 2,
+      padding: 4,
+      minWidth: 60,
+      maxWidth: 220,
+      height: 28,
+      borderRadius: 6.0
+    ),
+    input: InputTheme(
+      bg: color(0.10, 0.08, 0.11),
+      hotBg: color(0.34, 0.08, 0.15),
+      downBg: color(0.42, 0.10, 0.18),
+      disabledBg: color(0.14, 0.10, 0.13),
+      fg: color(1.0, 0.94, 0.96),
+      disabledFg: color(0.7),
+      placeholderFg: color(0.70, 0.58, 0.62),
+      caretFg: color(1.0, 0.94, 0.96),
+      border: color(0.40, 0.22, 0.28),
+      borderWidth: 1,
+      padding: 4,
+      minWidth: 100,
+      maxWidth: 1000,
+      minHeight: 28,
+      maxHeight: 28,
+      borderRadius: 4.0
+    ),
+    list: ListTheme(
+      bg: color(0.10, 0.08, 0.11),
+      border: color(0.40, 0.22, 0.28),
+      rowBg: color(0.0, 0.0, 0.0, 0.0),
+      rowHotBg: color(0.20, 0.07, 0.12),
+      rowDownBg: color(0.42, 0.10, 0.18),
+      rowSelectedBg: color(0.34, 0.08, 0.15),
+      fg: color(0.94, 0.95, 0.99),
+      selectedFg: color(0.98, 0.82, 0.86),
+      borderWidth: 1,
+      padding: 4,
+      gap: 4,
+      rowHeight: 24,
+      borderRadius: 6.0,
+      rowBorderRadius: 4.0
+    ),
+    textFg: color(0.95, 0.96, 0.99, 1.0),
+    accent: color(0.55, 0.10, 0.18),
+    accentHot: color(0.72, 0.16, 0.27),
+    accentDown: color(0.86, 0.20, 0.33)
+  )
+
+proc ensureTheme*(ui: var UI) {.gcsafe.} =
+  if ui.theme.button.height <= 0:
+    ui.theme = defaultUiTheme()
+
 proc style*(
   bg = color(0.0, 0.0, 0.0, 0.0),
   fg = color(1.0),
@@ -327,6 +436,7 @@ proc `onMeasureText=`*(ui: var UI, fn: MeasureTextProc) =
   ui.measureText = fn
 
 proc begin*(ui: var UI) =
+  ui.ensureTheme()
   for elem in ui.elems:
     if ui.widgets.contains(elem.id):
       ui.widgets[elem.id].box = elem.box
@@ -417,6 +527,7 @@ iterator items*(ui: var UI): ElemIndex =
       yield child
 
 proc createElem*(ui: var UI): ElemIndex =
+  ui.ensureTheme()
   ui.elems.add(Elem(id: ElemId($genOid())))
   result = ElemIndex(ui.elems.len - 1)
 
@@ -425,6 +536,7 @@ proc createElem*(ui: var UI): ElemIndex =
     echo fmt"[Shui Debug] Created elem {result.int}: {ui.elems[^1].id}"
 
 proc beginElem*(ui: var UI, elem: Elem, parent = ElemIndex(-1)): ElemIndex =
+  ui.ensureTheme()
   result = ui.createElem()
   ui[result] = elem
   if parent.int == -1:

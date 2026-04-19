@@ -33,44 +33,45 @@ macro lineInput*(text: var string, id: ElemId, blk: untyped) =
       if `id`.clicked(ui):
         `id`.focus(ui)
     block:
+      let theme = ui.theme.input
       var bgCol =
         if `id`.hot(ui) or focused:
-          color(0.35, 0.34, 0.7)
+          theme.hotBg
         else:
-          color(0.1, 0.1, 0.3)
+          theme.bg
       if `id`.down(ui):
-        bgCol = color(0.6, 0.5, 0.9)
+        bgCol = theme.downBg
       elem:
         id = `id`
         style = Style(
-          fg: color(1.0),
+          fg: theme.fg,
           bg: bgCol,
-          borderColor: color(0.6, 0.6, 0.6),
-          border: 1,
-          padding: 4,
-          borderRadius: 0.4,
+          borderColor: theme.border,
+          border: theme.borderWidth,
+          padding: theme.padding,
+          borderRadius: theme.borderRadius,
           gap: 2
         )
         size = (
-          w: Sizing(kind: Fit, min: 100, max: 1000), 
-          h: Sizing(kind: Fit, min: 28, max: 28)
+          w: Sizing(kind: Fit, min: theme.minWidth, max: theme.maxWidth),
+          h: Sizing(kind: Fit, min: theme.minHeight, max: theme.maxHeight)
         )
         dir = Row
         align = Start
         crossAlign = Center
         elem:
           text = `text`
-          style = Style(fg: color(1.0), bg: color(0.0))
+          style = Style(fg: theme.fg, bg: color(0.0))
         if focused:
           elem:
             size = (w: Sizing(kind: Fit, min: 2, max: 2), h: Grow)
             style = Style(
-              bg: (if ui.blinkTicker mod 2 == 0: color(0.0, 0.0, 0.0, 1.0) else: color(0.0, 0.0, 0.0, 0.0))
+              bg: (if ui.blinkTicker mod 2 == 0: theme.caretFg else: color(0.0, 0.0, 0.0, 0.0))
             )
         elif `text`.len == 0 and config.placeholder.len > 0:
           elem:
             text = config.placeholder
-            style = Style(fg: color(0.7), bg: color(0.0))
+            style = Style(fg: theme.placeholderFg, bg: color(0.0))
 
 type
   ComboBoxState* = object
@@ -95,17 +96,18 @@ macro comboBox*(value {.inject.}: var string, id {.inject.}: ElemId, blk: untype
         `id`.focus(ui)
 
     block:
+      let theme = ui.theme.input
       var bgCol =
         if `id`.hot(ui) or focused:
-          color(0.35, 0.34, 0.7)
+          theme.hotBg
         else:
-          color(0.1, 0.1, 0.3)
-      var fgCol = color(1.0)
+          theme.bg
+      var fgCol = theme.fg
       if `id`.down(ui):
-        bgCol = color(0.6, 0.5, 0.9)
+        bgCol = theme.downBg
       if config.disabled:
-        bgCol = color(0.1, 0.1, 0.2)
-        fgCol = color(0.7)
+        bgCol = theme.disabledBg
+        fgCol = theme.disabledFg
       elem:
         dir = Col
         elem:
@@ -113,10 +115,10 @@ macro comboBox*(value {.inject.}: var string, id {.inject.}: ElemId, blk: untype
           style = Style(
             fg: fgCol,
             bg: bgCol,
-            borderColor: color(0.6, 0.6, 0.6),
-            border: 1,
-            padding: 4,
-            borderRadius: 0.4,
+            borderColor: theme.border,
+            border: theme.borderWidth,
+            padding: theme.padding,
+            borderRadius: theme.borderRadius,
             gap: 4
           )
           size = (w: Fit, h: Fit)
@@ -148,10 +150,10 @@ macro comboBox*(value {.inject.}: var string, id {.inject.}: ElemId, blk: untype
             style = Style(
               fg: fgCol,
               bg: bgCol,
-              borderColor: color(0.6, 0.6, 0.6),
-              border: 1,
-              padding: 4,
-              borderRadius: 0.1,
+              borderColor: theme.border,
+              border: theme.borderWidth,
+              padding: theme.padding,
+              borderRadius: theme.borderRadius,
               gap: 4
             )
             size = (w: Sizing(kind: Fit, min: 200, max: 400), h: Fit)
@@ -166,21 +168,22 @@ macro keyValueOption*(key, descr: string) =
       comboBoxId.unfocus(ui)
     ui.registerWidget(key)
     block:
+      let theme = ui.theme.input
       var bgCol =
         if key.hot(ui):
-          color(0.1, 0.1, 0.3)
+          theme.hotBg
         else:
-          color(0.35, 0.34, 0.7)
-      var fgCol = color(1.0)
+          theme.bg
+      var fgCol = theme.fg
       if key.down(ui):
-        bgCol = color(0.6, 0.5, 0.9)
+        bgCol = theme.downBg
       elem:
         id = key
         style = Style(
           fg: fgCol,
           bg: bgCol,
-          padding: 4,
-          borderRadius: 0.4,
+          padding: theme.padding,
+          borderRadius: theme.borderRadius,
         )
         size = (w: Grow, h: Fit)
         dir = Row

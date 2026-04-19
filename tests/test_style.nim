@@ -45,6 +45,18 @@ suite "Default Style":
     check style.borderRadius == 0.0
     check style.rotation == 0.0
 
+  test "ui initializes the default theme":
+    var ui = UI.init()
+    check ui.theme.button.height == 28
+    check ui.theme.button.padding == 4
+    check ui.theme.panel.borderWidth == 2
+
+  test "zero-value ui lazily initializes theme":
+    var ui = UI()
+    check ui.theme.button.height == 0
+    discard ui.createElem()
+    check ui.theme.button.height == 28
+
 suite "Style Application":
   test "can apply style to element":
     var ui = UI()

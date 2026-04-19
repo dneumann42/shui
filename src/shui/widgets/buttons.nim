@@ -54,28 +54,39 @@ macro button*(text: string, id: ElemId, blk: untyped) =
     ui.registerWidget(`id`)
     `onClick`
     block:
+      let theme = ui.theme.button
       var bgCol =
         if `id`.hot(ui) or `toggleCheck`:
-          color(0.35, 0.34, 0.7)
+          theme.hotBg
         else:
-          color(0.1, 0.1, 0.3)
-      var fgCol = color(1.0)
+          theme.bg
+      var fgCol = theme.fg
+      var borderCol =
+        if `id`.hot(ui) or `toggleCheck`:
+          theme.hotBorder
+        else:
+          theme.border
       if `id`.down(ui):
-        bgCol = color(0.6, 0.5, 0.9)
+        bgCol = theme.downBg
+        borderCol = theme.downBorder
       if config.disabled:
-        bgCol = color(0.1, 0.1, 0.2)
-        fgCol = color(0.7)
+        bgCol = theme.disabledBg
+        fgCol = theme.disabledFg
+        borderCol = theme.disabledBorder
       elem:
         id = `id`
         style = Style(
           fg: fgCol,
           bg: bgCol,
-          borderColor: color(0.6, 0.6, 0.6),
-          border: 1,
-          padding: 4,
-          borderRadius: 8.0,
+          borderColor: borderCol,
+          border: theme.borderWidth,
+          padding: theme.padding,
+          borderRadius: theme.borderRadius,
         )
-        size = (w: Fit, h: Fit)
+        size = (
+          w: Sizing(kind: Fit, min: theme.minWidth, max: theme.maxWidth),
+          h: Sizing(kind: Fixed, min: theme.height, max: theme.height)
+        )
         dir = Row
         align = Center
         crossAlign = Center
@@ -86,4 +97,4 @@ macro button*(text: string, id: ElemId, blk: untyped) =
 proc label*(ui: var UI, elemIndex: ElemIndex, text: string) {.inline.} =
   elem:
     text = text
-    style = Style(fg: color(1.0), bg: color(0.0))
+    style = Style(fg: ui.theme.textFg, bg: color(0.0))
