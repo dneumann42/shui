@@ -18,13 +18,15 @@ suite "BasicInput":
       actionPressed: true,
       actionDown: false,
       dragPressed: false,
-      dragDown: true
+      dragDown: true,
+      shiftDown: true
     )
 
     check input.actionPressed == true
     check input.actionDown == false
     check input.dragPressed == false
     check input.dragDown == true
+    check input.shiftDown == true
 
   test "can track scroll":
     let input = BasicInput(scrollY: 100.0)

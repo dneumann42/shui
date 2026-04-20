@@ -121,6 +121,7 @@ type
     actionDown*: bool
     dragPressed*: bool
     dragDown*: bool
+    shiftDown*: bool
     backspacePressed*: bool
     enterPressed*: bool
     tabPressed*: bool

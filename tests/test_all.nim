@@ -10,6 +10,7 @@ import test_elements
 import test_layout
 import test_widgets
 import test_input
+import test_number_input
 import test_sizing
 import test_style
 import test_edge_cases
