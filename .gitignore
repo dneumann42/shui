@@ -8,3 +8,4 @@ tests/test_all
 nimble.develop
 nimble.paths
 nimbledeps
+tests/test_number_input

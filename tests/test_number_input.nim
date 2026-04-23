@@ -5,19 +5,24 @@ import shui/widgets/inputs
 
 template drawNumber(ui: var UI; value: var float; id: ElemId; decimals: static[int] = 0; step: float = 1.0) =
   ui.begin()
-  numberInput(value, id, -10.0, 10.0, decimals, step)
+  numberInput(value, id, decimals, step)
 
 suite "NumberInput helpers":
-  test "clamps and rounds integer values":
-    check clampNumberValue(10.8, -10.0, 10.0, 0) == 10.0
-    check clampNumberValue(2.6, -10.0, 10.0, 0) == 3.0
+  test "rounds integer values":
+    check clampNumberValue(10.8, 0) == 11.0
+    check clampNumberValue(2.6, 0) == 3.0
 
   test "filters number text":
-    check acceptsNumberText("-1.25", -10.0, 2)
-    check not acceptsNumberText("--1", -10.0, 2)
-    check not acceptsNumberText("1.2.3", -10.0, 2)
-    check not acceptsNumberText("-1", 0.0, 2)
-    check not acceptsNumberText("1.2", -10.0, 0)
+    check acceptsNumberText("-1.25", 2)
+    check not acceptsNumberText("--1", 2)
+    check not acceptsNumberText("1.2.3", 2)
+    check acceptsNumberText("-1", 2)
+    check not acceptsNumberText("1.2", 0)
+
+  test "parses valid numeric text without bounds":
+    var value = 0.0
+    check parseNumberText("123456.75", value, 2)
+    check value == 123456.75
 
 suite "NumberInput interactions":
   test "increment and decrement buttons adjust value":
@@ -43,7 +48,7 @@ suite "NumberInput interactions":
     drawNumber(ui, value, id)
     check value == 6.0
 
-  test "buttons clamp at bounds":
+  test "buttons do not clamp at prior bounds":
     var ui = UI()
     var value = 9.0
     let id = ElemId("number")
@@ -51,7 +56,7 @@ suite "NumberInput interactions":
     ui.input.shiftDown = true
     ui.clickedElemId = some(ElemId("number.inc"))
     drawNumber(ui, value, id)
-    check value == 10.0
+    check value == 14.0
 
   test "typed valid input updates value":
     var ui = UI()
@@ -130,3 +135,17 @@ suite "NumberInput interactions":
     drawNumber(ui, value, id)
 
     check value == 3.0
+
+  test "typed large negative input updates value":
+    var ui = UI()
+    var value = 1.0
+    let id = ElemId("number")
+    let fieldId = ElemId("number.field")
+
+    drawNumber(ui, value, id)
+    fieldId.focus(ui)
+    ui.setState(id, NumberInputState(editText: ""))
+    ui.input.textInput = "-123456"
+    drawNumber(ui, value, id)
+
+    check value == -123456.0
