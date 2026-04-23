@@ -12,13 +12,12 @@ type
   LineInputConfig* = object
     placeholder: string
 
-proc clampNumberValue*(value, minValue, maxValue: float; decimals: int): float =
-  result = max(minValue, min(maxValue, value))
+proc clampNumberValue*(value: float; decimals: int): float =
   if decimals <= 0:
-    result = round(result)
+    result = round(value)
   else:
     let factor = pow(10.0, decimals.float)
-    result = round(result * factor) / factor
+    result = round(value * factor) / factor
 
 proc formatNumberValue*(value: float; decimals: int): string =
   if decimals <= 0:
@@ -26,7 +25,7 @@ proc formatNumberValue*(value: float; decimals: int): string =
   else:
     value.formatFloat(ffDecimal, decimals)
 
-proc acceptsNumberText*(text: string; minValue: float; decimals: int): bool =
+proc acceptsNumberText*(text: string; decimals: int): bool =
   if text.len == 0:
     return true
   var dotCount = 0
@@ -35,7 +34,7 @@ proc acceptsNumberText*(text: string; minValue: float; decimals: int): bool =
     of '0'..'9':
       discard
     of '-':
-      if i != 0 or minValue >= 0.0:
+      if i != 0:
         return false
     of '.':
       if decimals <= 0:
@@ -47,11 +46,11 @@ proc acceptsNumberText*(text: string; minValue: float; decimals: int): bool =
       return false
   true
 
-proc parseNumberText*(text: string; value: var float; minValue, maxValue: float; decimals: int): bool =
+proc parseNumberText*(text: string; value: var float; decimals: int): bool =
   if text.len == 0 or text == "-" or text == "." or text == "-.":
     return false
   try:
-    value = clampNumberValue(parseFloat(text), minValue, maxValue, decimals)
+    value = clampNumberValue(parseFloat(text), decimals)
     true
   except ValueError:
     false
@@ -126,9 +125,8 @@ macro lineInput*(text: var string, id: ElemId, blk: untyped) =
 template numberInput*(
   value: var float;
   widgetId: ElemId;
-  minValue, maxValue: float;
-  decimals: static[int] = 2;
-  step: float = 1.0
+  decimals = 2;
+  step = 1.0
 ) =
   block:
     let decId = ElemId($widgetId & ".dec")
@@ -141,18 +139,17 @@ template numberInput*(
     if not ui.hasState(widgetId):
       ui.setState(widgetId, NumberInputState(editText: formatNumberValue(value, decimals)))
     var state = ui.getState(widgetId, NumberInputState)
-    value = clampNumberValue(value, minValue, maxValue, decimals)
 
     let focused = fieldId.focused(ui)
     let adjustedStep = step * (if ui.input.shiftDown: 5.0 else: 1.0)
 
     if decId.clicked(ui):
-      value = clampNumberValue(value - adjustedStep, minValue, maxValue, decimals)
+      value = value - adjustedStep
       state.editText = formatNumberValue(value, decimals)
       fieldId.unfocus(ui)
 
     if incId.clicked(ui):
-      value = clampNumberValue(value + adjustedStep, minValue, maxValue, decimals)
+      value = value + adjustedStep
       state.editText = formatNumberValue(value, decimals)
       fieldId.unfocus(ui)
 
@@ -169,25 +166,20 @@ template numberInput*(
           deltaX div 8
         else:
           -((-deltaX) div 8)
-      value = clampNumberValue(
-        state.dragStartValue + wholeSteps.float * adjustedStep,
-        minValue,
-        maxValue,
-        decimals
-      )
+      value = state.dragStartValue + wholeSteps.float * adjustedStep
       state.editText = formatNumberValue(value, decimals)
 
     if focused:
       if ui.input.textInput.len > 0:
         for ch in ui.input.textInput:
           let candidate = state.editText & $ch
-          if acceptsNumberText(candidate, minValue, decimals):
+          if acceptsNumberText(candidate, decimals):
             state.editText = candidate
-            discard parseNumberText(state.editText, value, minValue, maxValue, decimals)
+            discard parseNumberText(state.editText, value, decimals)
         ui.input.textInput = ""
       if ui.input.backspacePressed and state.editText.len > 0:
         state.editText = state.editText[0..^2]
-        discard parseNumberText(state.editText, value, minValue, maxValue, decimals)
+        discard parseNumberText(state.editText, value, decimals)
       if fieldId.clicked(ui) or ui.input.enterPressed or ui.input.tabPressed:
         state.editText = formatNumberValue(value, decimals)
         fieldId.unfocus(ui)
