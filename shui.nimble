@@ -8,8 +8,8 @@ srcDir        = "src"
 
 # Dependencies
 
-requires "nim >= 2.0.0"
-requires "chroma >= 0.2.7"
+requires "nim >= 2.2.8"
+requires "chroma"
 
 # Tasks
 
