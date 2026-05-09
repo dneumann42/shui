@@ -423,3 +423,58 @@ template scrollH*(ui: var UI; id: string; viewportOpts = boxOpts(); contentOpts 
     defer:
       ui.popBuildParent()
     body
+
+proc dialogCloseId*(id: string): string =
+  id & ".close"
+
+proc showDialog*(ui: var UI; id: string) =
+  ui.openDialog(id)
+
+proc hideDialog*(ui: var UI; id: string) =
+  ui.closeDialog(id)
+
+template dialogHeader*(ui: var UI; id: string; opts = boxOpts(justify = SpaceBetween, align = AlignCenter, spacing = 8, padding = uniformSides(8)); body: untyped) =
+  ui.panelRow(id, FilledPanel, opts):
+    body
+
+template dialogHeader*(ui: var UI; id: string; body: untyped) =
+  ui.dialogHeader(id, boxOpts(justify = SpaceBetween, align = AlignStretch, spacing = 8, padding = uniformSides(8))):
+    body
+
+template dialogBody*(ui: var UI; id: string; opts = boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch); body: untyped) =
+  ui.vbox(id, opts):
+    body
+
+template dialogBody*(ui: var UI; id: string; body: untyped) =
+  ui.dialogBody(id, boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch)):
+    body
+
+template dialogFooter*(ui: var UI; id: string; opts = boxOpts(justify = SpaceBetween, align = AlignCenter, spacing = 8, padding = uniformSides(8)); body: untyped) =
+  ui.panelRow(id, FilledPanel, opts):
+    body
+
+template dialogFooter*(ui: var UI; id: string; body: untyped) =
+  ui.dialogFooter(id, boxOpts(justify = SpaceBetween, align = AlignCenter, spacing = 8, padding = uniformSides(8))):
+    body
+
+template dialog*(ui: var UI; id: string; title = ""; showHeader = true; showClose = true; opts = boxOpts(spacing = 8, padding = uniformSides(8), align = AlignStretch, prefSize = size(520, 320)); body: untyped) =
+  block:
+    let parentResolved = ui.currentBuildParent()
+    var root = vboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex)
+    root.surfaceStyle = SurfaceBordered
+    discard ui.addWidget(root, parentResolved)
+    ui.setFloating(id, anchor = AnchorCenter, anchorToId = "", offsetX = 0, offsetY = 0)
+    ui.setVisible(id, false)
+    ui.pushBuildParent(id)
+    defer:
+      ui.popBuildParent()
+    if showHeader:
+      ui.dialogHeader(id & ".header", boxOpts(spacing = 4, padding = uniformSides(8), align = AlignStretch)):
+        if title.len > 0:
+          discard ui.text(id & ".title", title, prefSize = size(260, 28), alignSelf = SelfStart)
+        else:
+          discard ui.box(id & ".title.spacer", prefSize = size(10, 28), expand = true, flex = 1)
+        if showClose:
+          discard ui.button(dialogCloseId(id), "X", prefSize = size(84, 28))
+    ui.dialogBody(id & ".body"):
+      body

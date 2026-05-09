@@ -116,6 +116,7 @@ type
     rootIds*: seq[string]
     regionBindings*: Table[string, string]
     scrollByViewport*: Table[string, ScrollState]
+    openDialogs*: seq[string]
 
 proc zeroSides*(): Sides =
   Sides(top: 0, right: 0, bottom: 0, left: 0)
@@ -138,6 +139,7 @@ proc initUi*(): UI =
     rootIds: @[],
     regionBindings: initTable[string, string](),
     scrollByViewport: initTable[string, ScrollState](),
+    openDialogs: @[],
   )
 
 proc addElement*(ui: var UI; el: Element) =
@@ -193,6 +195,35 @@ proc setScrollOffset*(ui: var UI; viewportId: string; offsetX, offsetY: int) =
   s.offsetX = offsetX
   s.offsetY = offsetY
   ui.scrollByViewport[viewportId] = s
+
+proc isDialogOpen*(ui: UI; id: string): bool =
+  for dialogId in ui.openDialogs:
+    if dialogId == id:
+      return true
+  false
+
+proc hasOpenDialogs*(ui: UI): bool =
+  ui.openDialogs.len > 0
+
+proc topDialogId*(ui: UI): string =
+  if ui.openDialogs.len == 0: "" else: ui.openDialogs[^1]
+
+proc openDialog*(ui: var UI; id: string) =
+  if id.len == 0:
+    return
+  if not ui.isDialogOpen(id):
+    ui.openDialogs.add id
+  ui.setVisible(id, true)
+
+proc closeDialog*(ui: var UI; id: string) =
+  if id.len == 0:
+    return
+  var kept: seq[string] = @[]
+  for dialogId in ui.openDialogs:
+    if dialogId != id:
+      kept.add dialogId
+  ui.openDialogs = kept
+  ui.setVisible(id, false)
 
 proc pushBuildParent*(ui: var UI; id: string) =
   ui.buildStack.add id

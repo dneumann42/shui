@@ -1,5 +1,6 @@
 import std/[unittest, tables, strutils]
 import shui
+import shui/uirelay_runtime
 
 proc leafFixed(w, h: int): IntrinsicMeasureProc =
   result = proc(maxW, maxH: int): Size =
@@ -467,3 +468,38 @@ test "relay container auto-binds child ids to markdown layout cells":
   check resultLayout.rects["root.left"].w == 80
   check resultLayout.rects["root.right"].x == 80
   check resultLayout.rects["root.footer"].y == 184
+
+test "dialog state helpers manage visibility and open stack":
+  var ui = initUi()
+  ui.setRoot("root")
+  ui.addElement(vboxElement("root"))
+  ui.addElement(vboxElement("dlg"))
+  ui.addChild("root", "dlg")
+  check not ui.elements["dlg"].visible
+  check not ui.hasOpenDialogs()
+  ui.showDialog("dlg")
+  check ui.isDialogOpen("dlg")
+  check ui.hasOpenDialogs()
+  check ui.elements["dlg"].visible
+  ui.hideDialog("dlg")
+  check not ui.isDialogOpen("dlg")
+  check not ui.hasOpenDialogs()
+  check not ui.elements["dlg"].visible
+
+test "modal gating blocks non-floating controls while dialog open":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.vbox("root", boxOpts()):
+      discard ui.button("main.btn", "Main", prefSize = size(100, 30))
+      ui.vbox("dlg", boxOpts(prefSize = size(220, 120), align = AlignStretch)):
+        discard ui.button("dlg.btn", "In Dialog", prefSize = size(120, 30))
+
+  ui.setFloating("dlg", anchor = AnchorCenter)
+
+  ui.showDialog("dlg")
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 640, 480))
+  check resultLayout.ok
+  let mainRect = resultLayout.rects["main.btn"]
+  let dlgRect = resultLayout.rects["dlg.btn"]
+  check hitTestControlId(ui, "root", resultLayout.rects, point(mainRect.x + 4, mainRect.y + 4)) == ""
+  check hitTestControlId(ui, "root", resultLayout.rects, point(dlgRect.x + 4, dlgRect.y + 4)) == "dlg.btn"

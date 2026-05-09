@@ -305,7 +305,13 @@ proc findHoveredControl(ui: UI; rootId: string; rects: Table[string, Rect]; p: P
   let top = findHoveredControlFloating(ui, rootId, rects, p)
   if top.len > 0:
     return top
+  if ui.hasOpenDialogs():
+    # Modal behavior: when any dialog is open, only floating controls are interactable.
+    return ""
   findHoveredControlFlow(ui, rootId, rects, p)
+
+proc hitTestControlId*(ui: UI; rootId: string; rects: Table[string, Rect]; p: Point): string =
+  findHoveredControl(ui, rootId, rects, p)
 
 proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig(); onEvent: RuntimeEventHook = nil) =
   initBackend()

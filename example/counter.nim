@@ -45,6 +45,7 @@ when isMainModule:
         ui.cardFooter("left.controls.footer"):
           discard ui.text("step.label", "Step", prefSize = size(60, 22))
           discard ui.text("step.value", "1", prefSize = size(40, 22), alignSelf = SelfEnd)
+          discard ui.button("open.dialog", "About", prefSize = size(84, 28))
 
       ui.card("root.middle", BorderedPanel, boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch)):
         ui.cardHeader("middle.metrics.header"):
@@ -87,10 +88,18 @@ when isMainModule:
           discard ui.text("footer.left", "Layout: cards + header/body/footer + panels", prefSize = size(420, 20))
           discard ui.text("footer.right", "SDL3 Runtime", prefSize = size(120, 20))
 
+      ui.dialog("about.dialog", title = "About Shui", showHeader = true, showClose = true, opts = boxOpts(prefSize = size(520, 280), spacing = 8, padding = uniformSides(8))):
+        discard ui.text("about.line1", "This is a floating dialog widget.", prefSize = size(420, 26))
+        discard ui.text("about.line2", "When open, non-floating controls are non-interactive.", prefSize = size(460, 26))
+        discard ui.text("about.line3", "Use the Close button or footer action.", prefSize = size(360, 26))
+        ui.dialogFooter("about.dialog.footer", boxOpts(justify = SpaceBetween, align = AlignCenter, padding = uniformSides(6))):
+          discard ui.text("about.state", "Dialog is open", prefSize = size(180, 24))
+          discard ui.button("about.dismiss", "Dismiss", prefSize = size(96, 30))
+
   var cfg = defaultRuntimeConfig()
   cfg.title = "Shui Counter Cards"
-  cfg.width = 1100
-  cfg.height = 720
+  cfg.width = 1200
+  cfg.height = 900
   cfg.targetFps = 60
 
   cfg.background = color(22, 24, 30)
@@ -109,8 +118,6 @@ when isMainModule:
 
   var count = 0
   var step = 1
-  var screenW = cfg.width
-  var screenH = cfg.height
 
   proc syncValues() =
     setText(ui, "count.value", $count)
@@ -126,35 +133,37 @@ when isMainModule:
   runUirelayRuntime(ui, "root", cfg, proc(ev: Event; ui: var UI; running: var bool) =
     discard running
     case ev.kind
-    of WindowResizeEvent:
-      screenW = ev.x
-      screenH = ev.y
     of MouseDownEvent:
       if ev.button == LeftButton:
-        let frame = layoutInRect(ui, "root", rect(0, 0, screenW, screenH))
-        if frame.ok:
-          if "inc" in frame.rects and frame.rects["inc"].contains(point(ev.x, ev.y)):
-            count += step
-            note("- Increment pressed")
-          elif "dec" in frame.rects and frame.rects["dec"].contains(point(ev.x, ev.y)):
-            count -= step
-            note("- Decrement pressed")
-          elif "reset" in frame.rects and frame.rects["reset"].contains(point(ev.x, ev.y)):
-            count = 0
-            note("- Reset pressed")
-          elif comboBoxTriggerId("step.combo") in frame.rects and frame.rects[comboBoxTriggerId("step.combo")].contains(point(ev.x, ev.y)):
-            discard ui.comboBoxToggle("step.combo")
-            note("- Step menu toggled")
-          else:
-            for i in 0 .. 8:
-              let oid = comboBoxOptionId("step.combo", i)
-              if oid in frame.rects and frame.rects[oid].contains(point(ev.x, ev.y)):
-                if ui.comboBoxSelect("step.combo", i):
-                  if comboBoxTriggerId("step.combo") in ui.elements and ui.elements[comboBoxTriggerId("step.combo")].kind == Text:
-                    step = parseInt(ui.elements[comboBoxTriggerId("step.combo")].text)
-                    note("- Step changed")
-                break
-          syncValues()
+        let clicked = ui.clickedId
+        if clicked == "inc":
+          count += step
+          note("- Increment pressed")
+        elif clicked == "dec":
+          count -= step
+          note("- Decrement pressed")
+        elif clicked == "reset":
+          count = 0
+          note("- Reset pressed")
+        elif clicked == "open.dialog":
+          ui.showDialog("about.dialog")
+          note("- About dialog opened")
+        elif clicked == dialogCloseId("about.dialog") or clicked == "about.dismiss":
+          ui.hideDialog("about.dialog")
+          note("- About dialog closed")
+        elif clicked == comboBoxTriggerId("step.combo"):
+          discard ui.comboBoxToggle("step.combo")
+          note("- Step menu toggled")
+        else:
+          for i in 0 .. 8:
+            let oid = comboBoxOptionId("step.combo", i)
+            if clicked == oid:
+              if ui.comboBoxSelect("step.combo", i):
+                if comboBoxTriggerId("step.combo") in ui.elements and ui.elements[comboBoxTriggerId("step.combo")].kind == Text:
+                  step = parseInt(ui.elements[comboBoxTriggerId("step.combo")].text)
+                  note("- Step changed")
+              break
+        syncValues()
     else:
       discard
   )
