@@ -15,6 +15,11 @@ type
     background*: Color
     containerColor*: Color
     boxColor*: Color
+    buttonColor*: Color
+    buttonHoverColor*: Color
+    panelFillColor*: Color
+    panelInnerColor*: Color
+    panelBorderColor*: Color
     textColor*: Color
     textBgColor*: Color
     fontPath*: string
@@ -35,6 +40,11 @@ proc defaultRuntimeConfig*(): RuntimeConfig =
     background: color(24, 24, 24),
     containerColor: color(40, 40, 40),
     boxColor: color(72, 72, 72),
+    buttonColor: color(70, 90, 120),
+    buttonHoverColor: color(98, 126, 166),
+    panelFillColor: color(58, 58, 74),
+    panelInnerColor: color(34, 34, 44),
+    panelBorderColor: color(110, 124, 150),
     textColor: color(232, 232, 232),
     textBgColor: color(72, 72, 72),
     fontPath: "",
@@ -82,6 +92,24 @@ proc findFontPath(preferred: string): string =
       return p
   ""
 
+proc drawBorder(r: Rect; color: Color) =
+  if r.w <= 0 or r.h <= 0:
+    return
+  drawLine(r.x, r.y, r.x + r.w - 1, r.y, color)
+  drawLine(r.x, r.y, r.x, r.y + r.h - 1, color)
+  drawLine(r.x + r.w - 1, r.y, r.x + r.w - 1, r.y + r.h - 1, color)
+  drawLine(r.x, r.y + r.h - 1, r.x + r.w - 1, r.y + r.h - 1, color)
+
+proc drawSurface(r: Rect; style: SurfaceStyle; baseColor: Color; cfg: RuntimeConfig) =
+  case style
+  of SurfaceAuto:
+    fillRect(r, baseColor)
+  of SurfaceFilled:
+    fillRect(r, cfg.panelFillColor)
+  of SurfaceBordered:
+    fillRect(r, cfg.panelInnerColor)
+    drawBorder(r, cfg.panelBorderColor)
+
 proc drawTree(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font) =
   if id notin rects:
     return
@@ -89,19 +117,39 @@ proc drawTree(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
   let el = ui.elements[id]
   case el.kind
   of VBox, HBox, RelayContainer:
-    fillRect(r, cfg.containerColor)
+    drawSurface(r, el.surfaceStyle, cfg.containerColor, cfg)
   of Box:
-    fillRect(r, cfg.boxColor)
+    drawSurface(r, el.surfaceStyle, cfg.boxColor, cfg)
   of Text:
-    fillRect(r, cfg.textBgColor)
+    let isControl = el.interactivity == ControlElement
+    let bg =
+      if isControl:
+        (if ui.hoveredId == id: cfg.buttonHoverColor else: cfg.buttonColor)
+      else:
+        cfg.textBgColor
+    drawSurface(r, el.surfaceStyle, bg, cfg)
+    let textBg =
+      case el.surfaceStyle
+      of SurfaceAuto: bg
+      of SurfaceFilled: cfg.panelFillColor
+      of SurfaceBordered: cfg.panelInnerColor
     if font != Font(0):
       let ext = measureText(font, el.text)
       let tx = r.x + max(0, (r.w - ext.w) div 2)
       let ty = r.y + max(0, (r.h - ext.h) div 2)
-      discard drawText(font, tx, ty, el.text, cfg.textColor, cfg.textBgColor)
+      discard drawText(font, tx, ty, el.text, cfg.textColor, textBg)
 
   for childId in ui.childrenById.getOrDefault(id, @[]):
     drawTree(ui, childId, rects, cfg, font)
+
+proc findHoveredControl(ui: UI; id: string; rects: Table[string, Rect]; p: Point): string =
+  for childId in ui.childrenById.getOrDefault(id, @[]):
+    let hit = findHoveredControl(ui, childId, rects, p)
+    if hit.len > 0:
+      return hit
+  if id in rects and ui.elements[id].interactivity == ControlElement and rects[id].contains(p):
+    return id
+  ""
 
 proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig(); onEvent: RuntimeEventHook = nil) =
   initBackend()
@@ -119,6 +167,8 @@ proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig()
     echo "[shui] no usable font found; set cfg.fontPath or SHUI_FONT_PATH for text rendering"
 
   var running = true
+  var mouseX = -1
+  var mouseY = -1
   while running:
     var ev: Event
     while pollEvent(ev):
@@ -128,8 +178,24 @@ proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig()
       of WindowResizeEvent:
         screenLayout.width = ev.x
         screenLayout.height = ev.y
+      of MouseMoveEvent, MouseDownEvent, MouseUpEvent:
+        mouseX = ev.x
+        mouseY = ev.y
       else:
         discard
+
+      if ev.kind == MouseDownEvent and ev.button == LeftButton:
+        let frameNow =
+          if cfg.relayLayoutSrc.len > 0:
+            layoutWithUirelays(ui, cfg.relayLayoutSrc, screenLayout.width, screenLayout.height, cfg.lineHeight, cfg.padding, cfg.gap)
+          else:
+            layoutInRect(ui, rootId, rect(0, 0, screenLayout.width, screenLayout.height))
+        if frameNow.ok:
+          ui.clickedId = findHoveredControl(ui, rootId, frameNow.rects, point(ev.x, ev.y))
+        else:
+          ui.clickedId = ""
+      elif ev.kind == MouseUpEvent and ev.button == LeftButton:
+        ui.clickedId = ""
 
       if onEvent != nil:
         onEvent(ev, ui, running)
@@ -140,6 +206,10 @@ proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig()
       else:
         layoutInRect(ui, rootId, rect(0, 0, screenLayout.width, screenLayout.height))
     if frame.ok:
+      if mouseX >= 0 and mouseY >= 0:
+        ui.hoveredId = findHoveredControl(ui, rootId, frame.rects, point(mouseX, mouseY))
+      else:
+        ui.hoveredId = ""
       fillRect(rect(0, 0, screenLayout.width, screenLayout.height), cfg.background)
       drawTree(ui, rootId, frame.rects, cfg, font)
       refresh()

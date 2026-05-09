@@ -11,17 +11,19 @@ type
     error*: LayoutError
     measured*: Table[string, Size]
     rects*: Table[string, Rect]
+    logs*: seq[string]
 
-proc fail(msg: string): LayoutOutcome =
+proc fail(msg: string; logs: seq[string] = @[]): LayoutOutcome =
   LayoutOutcome(
     ok: false,
     error: LayoutError(msg: msg),
     measured: initTable[string, Size](),
     rects: initTable[string, Rect](),
+    logs: logs,
   )
 
-proc okOutcome(measured: Table[string, Size]; rects: Table[string, Rect]): LayoutOutcome =
-  LayoutOutcome(ok: true, measured: measured, rects: rects)
+proc okOutcome(measured: Table[string, Size]; rects: Table[string, Rect]; logs: seq[string]): LayoutOutcome =
+  LayoutOutcome(ok: true, measured: measured, rects: rects, logs: logs)
 
 proc validate*(ui: UI): LayoutError =
   var seen = initHashSet[string]()
@@ -63,8 +65,14 @@ proc validate*(ui: UI): LayoutError =
 
   return LayoutError(msg: "")
 
-proc measureNode(ui: UI; id: string; measured: var Table[string, Size]): Size =
+proc logLine(logs: var seq[string]; enabled: bool; msg: string) =
+  if enabled:
+    logs.add msg
+
+proc measureNode(ui: UI; id: string; measured: var Table[string, Size];
+                 logs: var seq[string]; logEnabled: bool): Size =
   if id in measured:
+    logs.logLine(logEnabled, fmt"measure cache-hit id={id} size={measured[id].w}x{measured[id].h}")
     return measured[id]
 
   let el = ui.elements[id]
@@ -76,6 +84,7 @@ proc measureNode(ui: UI; id: string; measured: var Table[string, Size]): Size =
       s = measure(el.maxSize.w, el.maxSize.h)
     s = clampSize(s, el.minSize, el.maxSize)
     measured[id] = s
+    logs.logLine(logEnabled, fmt"measure leaf id={id} kind={el.kind} size={s.w}x{s.h}")
     return s
   of VBox, HBox, RelayContainer:
     if el.kind == RelayContainer and el.relayLayout.len > 0:
@@ -89,7 +98,7 @@ proc measureNode(ui: UI; id: string; measured: var Table[string, Size]): Size =
 
     for childId in ui.childrenById.getOrDefault(id, @[]):
       let child = ui.elements[childId]
-      let childSize = measureNode(ui, childId, measured)
+      let childSize = measureNode(ui, childId, measured, logs, logEnabled)
       let childOuter = outerSize(childSize, child.margin)
       main += mainSize(axis, childOuter)
       cross = max(cross, crossSize(axis, childOuter))
@@ -109,6 +118,7 @@ proc measureNode(ui: UI; id: string; measured: var Table[string, Size]): Size =
 
     box = clampSize(box, el.minSize, el.maxSize)
     measured[id] = box
+    logs.logLine(logEnabled, fmt"measure container id={id} kind={el.kind} axis={axis} children={childCount} size={box.w}x{box.h}")
     return box
 
 proc positionFromJustify(justify: Justify; containerMain, usedMain, count, spacing: int): tuple[start: int, gap: int] =
@@ -133,17 +143,12 @@ proc positionFromJustify(justify: Justify; containerMain, usedMain, count, spaci
       let each = free div (count + 1)
       (each, spacing + each)
 
-proc selfStart(self: SelfAlign; containerMain, outerMain: int): int =
-  case self
-  of SelfStart: 0
-  of SelfEnd: max(0, containerMain - outerMain)
-  of SelfCenter: max(0, (containerMain - outerMain) div 2)
-  of SelfStretch: 0
-  of SelfAuto: 0
-
-proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size]; rects: var Table[string, Rect]) =
+proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
+                 rects: var Table[string, Rect]; logs: var seq[string];
+                 logEnabled: bool) =
   rects[id] = rect
   let el = ui.elements[id]
+  logs.logLine(logEnabled, fmt"arrange id={id} kind={el.kind} rect=({rect.x},{rect.y},{rect.w},{rect.h})")
   if el.kind == Box or el.kind == Text:
     return
 
@@ -252,30 +257,40 @@ proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size]; 
       childRect.x = content.x + crossPos
       childRect.y = content.y + mainPos
 
-    arrangeNode(ui, c.id, childRect, measured, rects)
+    logs.logLine(logEnabled, fmt"arrange child id={c.id} parent={id} rect=({childRect.x},{childRect.y},{childRect.w},{childRect.h})")
+    arrangeNode(ui, c.id, childRect, measured, rects, logs, logEnabled)
 
     cursor += outerMain
     if i < children.len - 1:
       cursor += just.gap
 
-proc layoutInRect*(ui: UI; rootId: string; rootRect: Rect): LayoutOutcome =
+proc layoutInRect*(ui: UI; rootId: string; rootRect: Rect; debugLog = false): LayoutOutcome =
+  var logs: seq[string] = @[]
+  logs.logLine(debugLog, fmt"layout start root={rootId} rect=({rootRect.x},{rootRect.y},{rootRect.w},{rootRect.h})")
   let err = validate(ui)
   if err.msg.len > 0:
-    return fail(err.msg)
+    logs.logLine(debugLog, "layout validate error: " & err.msg)
+    return fail(err.msg, logs)
   if rootId notin ui.elements:
-    return fail(fmt"missing layout root id: {rootId}")
+    let m = fmt"missing layout root id: {rootId}"
+    logs.logLine(debugLog, "layout root error: " & m)
+    return fail(m, logs)
 
   var measured = initTable[string, Size]()
-  discard measureNode(ui, rootId, measured)
+  discard measureNode(ui, rootId, measured, logs, debugLog)
 
   var rects = initTable[string, Rect]()
-  arrangeNode(ui, rootId, rootRect, measured, rects)
-  return okOutcome(measured, rects)
+  arrangeNode(ui, rootId, rootRect, measured, rects, logs, debugLog)
+  logs.logLine(debugLog, "layout done")
+  return okOutcome(measured, rects, logs)
 
-proc layoutWithUirelays*(ui: UI; layoutSrc: string; screenW, screenH: int; lineHeight = 20; padding = 6; gap = 0): LayoutOutcome =
+proc layoutWithUirelays*(ui: UI; layoutSrc: string; screenW, screenH: int; lineHeight = 20; padding = 6; gap = 0; debugLog = false): LayoutOutcome =
+  var logs: seq[string] = @[]
+  logs.logLine(debugLog, fmt"layout uirelays start screen={screenW}x{screenH}")
   let err = validate(ui)
   if err.msg.len > 0:
-    return fail(err.msg)
+    logs.logLine(debugLog, "layout validate error: " & err.msg)
+    return fail(err.msg, logs)
 
   let parsed = parseLayout(layoutSrc)
   let cells = resolve(parsed, screenW, screenH, lineHeight, padding, gap)
@@ -285,10 +300,16 @@ proc layoutWithUirelays*(ui: UI; layoutSrc: string; screenW, screenH: int; lineH
 
   for cellName, rootId in ui.regionBindings:
     if rootId notin ui.elements:
-      return fail(fmt"region '{cellName}' bound to missing element id '{rootId}'")
+      let m = fmt"region '{cellName}' bound to missing element id '{rootId}'"
+      logs.logLine(debugLog, "layout bind error: " & m)
+      return fail(m, logs)
     if cellName notin cells:
-      return fail(fmt"missing uirelays cell '{cellName}' for binding to '{rootId}'")
-    discard measureNode(ui, rootId, measured)
-    arrangeNode(ui, rootId, cells[cellName], measured, rects)
+      let m = fmt"missing uirelays cell '{cellName}' for binding to '{rootId}'"
+      logs.logLine(debugLog, "layout cell error: " & m)
+      return fail(m, logs)
+    logs.logLine(debugLog, fmt"layout cell bind cell={cellName} root={rootId} rect=({cells[cellName].x},{cells[cellName].y},{cells[cellName].w},{cells[cellName].h})")
+    discard measureNode(ui, rootId, measured, logs, debugLog)
+    arrangeNode(ui, rootId, cells[cellName], measured, rects, logs, debugLog)
 
-  return okOutcome(measured, rects)
+  logs.logLine(debugLog, "layout uirelays done")
+  return okOutcome(measured, rects, logs)

@@ -23,36 +23,91 @@ when isMainModule:
   var ui = initUi()
 
   ui.layout("root"):
-    ui.vbox("root", boxOpts(spacing = 12, padding = uniformSides(24), align = AlignCenter)):
-      discard ui.text("title", "Shui Counter", prefSize = size(220, 30), alignSelf = SelfCenter)
-      discard ui.text("value", "0", prefSize = size(220, 42))
-      ui.hbox("buttons", boxOpts(spacing = 8, align = AlignStretch)):
-        discard ui.text("dec", "-", prefSize = size(70, 36), measure = fixed(70, 36))
-        discard ui.text("reset", "reset", prefSize = size(90, 36), measure = fixed(90, 36))
-        discard ui.text("inc", "+", prefSize = size(70, 36), measure = fixed(70, 36))
+    ui.vbox("root", boxOpts(spacing = 12, padding = uniformSides(12), align = AlignStretch)):
+      ui.card("hero", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(10))):
+        ui.cardHeader("hero.header"):
+          discard ui.text("title", "Shui Counter Dashboard", prefSize = size(480, 30), alignSelf = SelfCenter)
+        ui.cardBody("hero.body", boxOpts(spacing = 4, padding = uniformSides(6), align = AlignCenter)):
+          discard ui.text("subtitle", "Control element hover + card layout stress test", prefSize = size(480, 24), alignSelf = SelfCenter)
+
+      ui.hbox("content", boxOpts(spacing = 12, align = AlignStretch, expand = true, flex = 1)):
+        ui.card("left.controls", FilledPanel, boxOpts(spacing = 8, padding = uniformSides(10), prefSize = size(220, 0), expand = true, flex = 1)):
+          ui.cardHeader("left.controls.header"):
+            discard ui.text("controls.title", "Controls", prefSize = size(180, 24))
+          ui.cardBody("left.controls.body", boxOpts(spacing = 6, padding = uniformSides(6), align = AlignStretch)):
+            discard ui.button("inc", "Increment", prefSize = size(180, 36), measure = fixed(180, 36))
+            discard ui.button("dec", "Decrement", prefSize = size(180, 36), measure = fixed(180, 36))
+            discard ui.button("reset", "Reset", prefSize = size(180, 36), measure = fixed(180, 36))
+            ui.hbox("step.row", boxOpts(spacing = 6, align = AlignStretch)):
+              discard ui.button("step.minus", "- Step", prefSize = size(86, 32), measure = fixed(86, 32), expand = true, flex = 1)
+              discard ui.button("step.plus", "+ Step", prefSize = size(86, 32), measure = fixed(86, 32), expand = true, flex = 1)
+          ui.cardFooter("left.controls.footer"):
+            discard ui.text("step.label", "Step", prefSize = size(60, 22))
+            discard ui.text("step.value", "1", prefSize = size(40, 22), alignSelf = SelfEnd)
+
+        ui.card("middle.metrics", BorderedPanel, boxOpts(spacing = 8, padding = uniformSides(10), expand = true, flex = 2)):
+          ui.cardHeader("middle.metrics.header"):
+            discard ui.text("metrics.title", "Metrics", prefSize = size(220, 24), alignSelf = SelfCenter)
+          ui.cardBody("middle.metrics.body", boxOpts(spacing = 10, padding = uniformSides(8), align = AlignStretch, expand = true, flex = 1)):
+            ui.panel("counter.panel", FilledPanel, boxOpts(spacing = 4, padding = uniformSides(10), align = AlignCenter)):
+              discard ui.text("count.value", "0", prefSize = size(180, 54), alignSelf = SelfCenter)
+              discard ui.text("count.hint", "Current Count", prefSize = size(180, 20), alignSelf = SelfCenter)
+            ui.hbox("derived.row", boxOpts(spacing = 8, align = AlignStretch, expand = true, flex = 1)):
+              ui.panel("double.panel", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8), expand = true, flex = 1)):
+                discard ui.text("double.label", "Double", prefSize = size(80, 18))
+                discard ui.text("double.value", "0", prefSize = size(80, 28))
+              ui.panel("square.panel", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8), expand = true, flex = 1)):
+                discard ui.text("square.label", "Square", prefSize = size(80, 18))
+                discard ui.text("square.value", "0", prefSize = size(80, 28))
+
+        ui.card("right.activity", FilledPanel, boxOpts(spacing = 8, padding = uniformSides(10), prefSize = size(250, 0), expand = true, flex = 1)):
+          ui.cardHeader("right.activity.header"):
+            discard ui.text("activity.title", "Activity", prefSize = size(180, 24))
+          ui.cardBody("right.activity.body", boxOpts(spacing = 6, padding = uniformSides(6), align = AlignStretch)):
+            discard ui.text("activity.1", "- Waiting for input", prefSize = size(220, 22))
+            discard ui.text("activity.2", "- Hover buttons for highlight", prefSize = size(220, 22))
+            discard ui.text("activity.3", "- Click controls to mutate", prefSize = size(220, 22))
+
+      ui.card("footer", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8))):
+        ui.cardFooter("footer.row", boxOpts(justify = SpaceBetween, align = AlignCenter, padding = uniformSides(4))):
+          discard ui.text("footer.left", "Layout: cards + header/body/footer + panels", prefSize = size(360, 20))
+          discard ui.text("footer.right", "SDL3 Runtime", prefSize = size(120, 20), alignSelf = SelfEnd)
 
   var cfg = defaultRuntimeConfig()
-  cfg.title = "Shui Counter"
-  cfg.width = 520
-  cfg.height = 320
+  cfg.title = "Shui Counter Cards"
+  cfg.width = 1100
+  cfg.height = 720
   cfg.targetFps = 60
-  cfg.containerColor = color(46, 46, 56)
-  cfg.boxColor = color(70, 90, 120)
-  cfg.textBgColor = color(70, 90, 120)
-  cfg.textColor = color(242, 246, 255)
-  cfg.background = color(28, 28, 34)
-  # Fedora dejavu-sans-fonts package path.
+
+  cfg.background = color(22, 24, 30)
+  cfg.containerColor = color(36, 40, 50)
+  cfg.boxColor = color(64, 76, 96)
+  cfg.textBgColor = color(58, 66, 84)
+  cfg.buttonColor = color(66, 92, 136)
+  cfg.buttonHoverColor = color(92, 126, 186)
+  cfg.panelFillColor = color(54, 60, 78)
+  cfg.panelInnerColor = color(30, 34, 44)
+  cfg.panelBorderColor = color(126, 146, 186)
+  cfg.textColor = color(236, 242, 255)
+
   cfg.fontPath = "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf"
   cfg.fontSize = 18
 
   var count = 0
+  var step = 1
   var screenW = cfg.width
   var screenH = cfg.height
 
-  proc syncValue() =
-    setText(ui, "value", $count)
+  proc syncValues() =
+    setText(ui, "count.value", $count)
+    setText(ui, "double.value", $(count * 2))
+    setText(ui, "square.value", $(count * count))
+    setText(ui, "step.value", $step)
 
-  syncValue()
+  proc note(text: string) =
+    setText(ui, "activity.1", text)
+
+  syncValues()
 
   runUirelayRuntime(ui, "root", cfg, proc(ev: Event; ui: var UI; running: var bool) =
     discard running
@@ -65,14 +120,21 @@ when isMainModule:
         let frame = layoutInRect(ui, "root", rect(0, 0, screenW, screenH))
         if frame.ok:
           if "inc" in frame.rects and frame.rects["inc"].contains(point(ev.x, ev.y)):
-            inc count
-            syncValue()
+            count += step
+            note("- Increment pressed")
           elif "dec" in frame.rects and frame.rects["dec"].contains(point(ev.x, ev.y)):
-            dec count
-            syncValue()
+            count -= step
+            note("- Decrement pressed")
           elif "reset" in frame.rects and frame.rects["reset"].contains(point(ev.x, ev.y)):
             count = 0
-            syncValue()
+            note("- Reset pressed")
+          elif "step.plus" in frame.rects and frame.rects["step.plus"].contains(point(ev.x, ev.y)):
+            step = min(50, step + 1)
+            note("- Step increased")
+          elif "step.minus" in frame.rects and frame.rects["step.minus"].contains(point(ev.x, ev.y)):
+            step = max(1, step - 1)
+            note("- Step decreased")
+          syncValues()
     else:
       discard
   )

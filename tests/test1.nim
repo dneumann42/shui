@@ -274,3 +274,101 @@ test "self center overrides cross-axis only in vbox flow":
   check resultLayout.ok
   check resultLayout.rects["centered"].x == 45
   check resultLayout.rects["centered"].y == 0
+
+test "space evenly distributes children in hbox":
+  var ui = initUi()
+  ui.setRoot("root")
+  ui.addElement(Element(
+    id: "root",
+    kind: HBox,
+    justify: SpaceEvenly,
+    align: AlignStart,
+    minSize: size(0, 0),
+    maxSize: size(0, 0),
+  ))
+  ui.addElement(Element(id: "a", kind: Box, minSize: size(0, 0), maxSize: size(0, 0)))
+  ui.addElement(Element(id: "b", kind: Box, minSize: size(0, 0), maxSize: size(0, 0)))
+  ui.setMeasure("a", leafFixed(10, 2))
+  ui.setMeasure("b", leafFixed(10, 2))
+  ui.addChild("root", "a")
+  ui.addChild("root", "b")
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 50, 10))
+  check resultLayout.ok
+  # free=30, each=10 -> starts at x=10, gap=10
+  check resultLayout.rects["a"].x == 10
+  check resultLayout.rects["b"].x == 30
+
+test "flex weights distribute remaining space":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.hbox("root", boxOpts(spacing = 0, align = AlignStretch)):
+      discard ui.box("a", prefSize = size(10, 4), measure = leafFixed(10, 4), expand = true, flex = 1)
+      discard ui.box("b", prefSize = size(10, 4), measure = leafFixed(10, 4), expand = true, flex = 3)
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 80, 10))
+  check resultLayout.ok
+  # base=20, extra=60 -> +15 and +45
+  check resultLayout.rects["a"].w == 25
+  check resultLayout.rects["b"].w == 55
+
+test "align self end overrides parent align":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.vbox("root", boxOpts(align = AlignStart)):
+      discard ui.box("child", measure = leafFixed(10, 2), alignSelf = SelfEnd)
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 100, 20))
+  check resultLayout.ok
+  check resultLayout.rects["child"].x == 90
+
+test "debug logging captures measure and arrange":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.vbox("root", boxOpts(spacing = 1)):
+      discard ui.box("a", measure = leafFixed(4, 3))
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 20, 10), debugLog = true)
+  check resultLayout.ok
+  check resultLayout.logs.len > 0
+  check resultLayout.logs.join("\n").contains("measure container id=root")
+  check resultLayout.logs.join("\n").contains("arrange child id=a parent=root")
+
+test "debug logging captures validation failure":
+  var ui = initUi()
+  ui.setRoot("root")
+  ui.addElement(Element(id: "root", kind: VBox, minSize: size(0, 0), maxSize: size(0, 0)))
+  ui.addChild("root", "missing")
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 10, 10), debugLog = true)
+  check not resultLayout.ok
+  check resultLayout.logs.join("\n").contains("layout validate error")
+
+test "button widget measures and lays out as leaf":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.vbox("root", boxOpts(spacing = 0)):
+      discard ui.button("ok", "OK", measure = leafFixed(12, 4))
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 100, 20))
+  check resultLayout.ok
+  check resultLayout.measured["ok"] == size(12, 4)
+  check resultLayout.rects["ok"].w == 12
+  check ui.elements["ok"].kind == Text
+  check ui.elements["ok"].interactivity == ControlElement
+
+test "card helpers set expected surface styles":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.card("card1", BorderedPanel, boxOpts()):
+      ui.cardHeader("card1.header", boxOpts()):
+        discard ui.text("h", "Header", prefSize = size(80, 20))
+      ui.cardBody("card1.body", boxOpts()):
+        discard ui.text("b", "Body", prefSize = size(80, 20))
+      ui.cardFooter("card1.footer", boxOpts()):
+        discard ui.button("ok", "OK", prefSize = size(60, 20))
+
+  check ui.elements["card1"].surfaceStyle == SurfaceBordered
+  check ui.elements["card1.header"].surfaceStyle == SurfaceFilled
+  check ui.elements["card1.body"].surfaceStyle == SurfaceAuto
+  check ui.elements["card1.footer"].surfaceStyle == SurfaceFilled

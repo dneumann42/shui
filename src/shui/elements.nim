@@ -27,6 +27,15 @@ type
     SelfCenter
     SelfStretch
 
+  Interactivity* = enum
+    StaticElement
+    ControlElement
+
+  SurfaceStyle* = enum
+    SurfaceAuto
+    SurfaceFilled
+    SurfaceBordered
+
   ElementKind* = enum
     Box
     Text
@@ -48,6 +57,8 @@ type
 
   Element* = object
     id*: string
+    interactivity*: Interactivity
+    surfaceStyle*: SurfaceStyle
     margin*: Sides
     minSize*: Size
     prefSize*: Size
@@ -74,6 +85,8 @@ type
     parentById*: Table[string, string]
     childrenById*: Table[string, seq[string]]
     buildStack*: seq[string]
+    hoveredId*: string
+    clickedId*: string
     rootIds*: seq[string]
     regionBindings*: Table[string, string]
 
@@ -93,6 +106,8 @@ proc initUi*(): UI =
     parentById: initTable[string, string](),
     childrenById: initTable[string, seq[string]](),
     buildStack: @[],
+    hoveredId: "",
+    clickedId: "",
     rootIds: @[],
     regionBindings: initTable[string, string](),
   )
