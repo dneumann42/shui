@@ -263,3 +263,14 @@ test "text uses ui measure callback and falls back to pref size":
   check resultLayout.measured["title"] == size(3, 2)
   # avatar is measured by UI callback
   check resultLayout.measured["avatar"] == size(6, 4)
+
+test "self center overrides cross-axis only in vbox flow":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.vbox("root", boxOpts(spacing = 0, align = AlignStart)):
+      discard ui.text("centered", "C", prefSize = size(10, 4), alignSelf = SelfCenter, justifySelf = SelfCenter)
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 100, 40))
+  check resultLayout.ok
+  check resultLayout.rects["centered"].x == 45
+  check resultLayout.rects["centered"].y == 0

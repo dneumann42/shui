@@ -37,9 +37,11 @@ proc boxElement*(id: string; margin = zeroSides(); minSize = size(0, 0); prefSiz
     maxSize: maxSize,
     expand: expand,
     flex: flex,
+    alignSelf: SelfAuto,
+    justifySelf: SelfAuto,
   )
 
-proc textElement*(id: string; text: string; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): Element =
+proc textElement*(id: string; text: string; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): Element =
   Element(
     id: id,
     kind: Text,
@@ -50,6 +52,8 @@ proc textElement*(id: string; text: string; margin = zeroSides(); minSize = size
     maxSize: maxSize,
     expand: expand,
     flex: flex,
+    alignSelf: alignSelf,
+    justifySelf: justifySelf,
   )
 
 proc vboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): Element =
@@ -67,6 +71,8 @@ proc vboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacin
     maxSize: maxSize,
     expand: expand,
     flex: flex,
+    alignSelf: SelfAuto,
+    justifySelf: SelfAuto,
   )
 
 proc hboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): Element =
@@ -84,6 +90,8 @@ proc hboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacin
     maxSize: maxSize,
     expand: expand,
     flex: flex,
+    alignSelf: SelfAuto,
+    justifySelf: SelfAuto,
   )
 
 proc relayElement*(id: string; relayLayout: string; justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): Element =
@@ -101,6 +109,8 @@ proc relayElement*(id: string; relayLayout: string; justify = JustifyStart; alig
     maxSize: maxSize,
     expand: expand,
     flex: flex,
+    alignSelf: SelfAuto,
+    justifySelf: SelfAuto,
   )
 
 proc addWidget*(ui: var UI; el: Element; parentId = ""): string =
@@ -138,14 +148,17 @@ template hbox*(ui: var UI; id: string; opts = boxOpts(); body: untyped) =
       ui.popBuildParent()
     body
 
-proc box*(ui: var UI; id: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): string =
-  let widgetId = ui.addWidget(boxElement(id, margin, minSize, prefSize, maxSize, expand, flex), resolveParentId(ui, parentId))
+proc box*(ui: var UI; id: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): string =
+  var el = boxElement(id, margin, minSize, prefSize, maxSize, expand, flex)
+  el.alignSelf = alignSelf
+  el.justifySelf = justifySelf
+  let widgetId = ui.addWidget(el, resolveParentId(ui, parentId))
   if measure != nil:
     ui.setMeasure(widgetId, measure)
   widgetId
 
-proc text*(ui: var UI; id: string; value: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): string =
-  let widgetId = ui.addWidget(textElement(id, value, margin, minSize, prefSize, maxSize, expand, flex), resolveParentId(ui, parentId))
+proc text*(ui: var UI; id: string; value: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): string =
+  let widgetId = ui.addWidget(textElement(id, value, margin, minSize, prefSize, maxSize, expand, flex, alignSelf, justifySelf), resolveParentId(ui, parentId))
   if measure != nil:
     ui.setMeasure(widgetId, measure)
   widgetId

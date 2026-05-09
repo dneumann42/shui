@@ -133,6 +133,14 @@ proc positionFromJustify(justify: Justify; containerMain, usedMain, count, spaci
       let each = free div (count + 1)
       (each, spacing + each)
 
+proc selfStart(self: SelfAlign; containerMain, outerMain: int): int =
+  case self
+  of SelfStart: 0
+  of SelfEnd: max(0, containerMain - outerMain)
+  of SelfCenter: max(0, (containerMain - outerMain) div 2)
+  of SelfStretch: 0
+  of SelfAuto: 0
+
 proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size]; rects: var Table[string, Rect]) =
   rects[id] = rect
   let el = ui.elements[id]
@@ -196,28 +204,53 @@ proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size]; 
     var childInner = c.base
     setMain(axis, childInner, innerMain)
 
-    case el.align
-    of AlignStretch:
+    let effectiveCrossAlignForSize =
+      case child.alignSelf
+      of SelfAuto:
+        case el.align
+        of AlignStretch: SelfStretch
+        of AlignStart: SelfStart
+        of AlignEnd: SelfEnd
+        of AlignCenter: SelfCenter
+      else:
+        child.alignSelf
+
+    if effectiveCrossAlignForSize == SelfStretch:
       setCross(axis, childInner, maxCrossInner)
     else:
       setCross(axis, childInner, min(crossSize(axis, childInner), maxCrossInner))
 
-    let crossPos =
-      case el.align
-      of AlignStart, AlignStretch:
-        crossMarginBefore
-      of AlignEnd:
-        contentCross - crossMarginAfter - crossSize(axis, childInner)
-      of AlignCenter:
-        (contentCross - crossSize(axis, childInner)) div 2
+    var crossPos = 0
+    let effectiveCrossAlign =
+      case child.alignSelf
+      of SelfAuto:
+        case el.align
+        of AlignStart: SelfStart
+        of AlignEnd: SelfEnd
+        of AlignCenter: SelfCenter
+        of AlignStretch: SelfStretch
+      else:
+        child.alignSelf
+
+    case effectiveCrossAlign
+    of SelfStart, SelfStretch:
+      crossPos = crossMarginBefore
+    of SelfEnd:
+      crossPos = contentCross - crossMarginAfter - crossSize(axis, childInner)
+    of SelfCenter:
+      crossPos = (contentCross - crossSize(axis, childInner)) div 2
+    of SelfAuto:
+      discard
+
+    let mainPos = cursor + mainMarginBefore
 
     var childRect = rect(0, 0, childInner.w, childInner.h)
     if axis == Horizontal:
-      childRect.x = content.x + cursor + mainMarginBefore
+      childRect.x = content.x + mainPos
       childRect.y = content.y + crossPos
     else:
       childRect.x = content.x + crossPos
-      childRect.y = content.y + cursor + mainMarginBefore
+      childRect.y = content.y + mainPos
 
     arrangeNode(ui, c.id, childRect, measured, rects)
 

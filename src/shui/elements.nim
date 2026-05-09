@@ -20,6 +20,13 @@ type
     AlignCenter
     AlignStretch
 
+  SelfAlign* = enum
+    SelfAuto
+    SelfStart
+    SelfEnd
+    SelfCenter
+    SelfStretch
+
   ElementKind* = enum
     Box
     Text
@@ -47,6 +54,8 @@ type
     maxSize*: Size
     expand*: bool
     flex*: int
+    alignSelf*: SelfAlign
+    justifySelf*: SelfAlign
     case kind*: ElementKind
     of Box:
       discard

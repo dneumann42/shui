@@ -9,3 +9,7 @@ nimble.develop
 nimble.paths
 nimbledeps
 tests/test_number_input
+tests/test1
+tests/t*
+example/counter
+example/*.exe
