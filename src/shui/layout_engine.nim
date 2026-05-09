@@ -1,4 +1,4 @@
-import std/[tables, sets, strformat]
+import std/[tables, sets, strformat, strutils]
 import uirelays/[coords, layout]
 import ./elements
 
@@ -167,8 +167,66 @@ proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
   if el.kind == Box or el.kind == Text:
     return
 
-  let axis = axisForKind(el.kind)
   let content = innerRect(rect, el.padding)
+  if el.kind == RelayContainer and el.relayLayout.len > 0:
+    var floatingChildren: seq[string] = @[]
+    for childId in ui.childrenById.getOrDefault(id, @[]):
+      let child = ui.elements[childId]
+      if child.visible and child.positionMode == FloatingPosition:
+        floatingChildren.add childId
+
+    try:
+      let parsed = parseLayout(el.relayLayout)
+      let cells = resolve(parsed, content.w, content.h)
+      for childId in ui.childrenById.getOrDefault(id, @[]):
+        let child = ui.elements[childId]
+        if not child.visible or child.positionMode == FloatingPosition:
+          continue
+        var cellName = childId
+        let prefix = id & "."
+        if childId.startsWith(prefix):
+          cellName = childId.substr(prefix.len)
+        if cellName in cells:
+          let c = cells[cellName]
+          let childRect = rect(content.x + c.x, content.y + c.y, c.w, c.h)
+          logs.logLine(logEnabled, fmt"arrange relay child id={childId} cell={cellName} rect=({childRect.x},{childRect.y},{childRect.w},{childRect.h})")
+          arrangeNode(ui, childId, childRect, measured, rects, logs, logEnabled)
+        else:
+          logs.logLine(logEnabled, fmt"arrange relay miss id={childId} cell={cellName}")
+
+      for childId in floatingChildren:
+        let child = ui.elements[childId]
+        let childSize = measured.getOrDefault(childId, size(0, 0))
+        let target =
+          if child.anchorToId.len > 0 and child.anchorToId in rects:
+            rects[child.anchorToId]
+          else:
+            content
+        var x = target.x
+        var y = target.y
+        case child.anchor
+        of AnchorTopLeft:
+          x = target.x
+          y = target.y
+        of AnchorTopRight:
+          x = target.x + target.w - childSize.w
+          y = target.y
+        of AnchorBottomLeft:
+          x = target.x
+          y = target.y + target.h
+        of AnchorBottomRight:
+          x = target.x + target.w - childSize.w
+          y = target.y + target.h
+        of AnchorCenter:
+          x = target.x + (target.w - childSize.w) div 2
+          y = target.y + (target.h - childSize.h) div 2
+        let childRect = rect(x + child.offsetX, y + child.offsetY, childSize.w, childSize.h)
+        arrangeNode(ui, childId, childRect, measured, rects, logs, logEnabled)
+      return
+    except CatchableError:
+      logs.logLine(logEnabled, fmt"relay layout parse failed id={id}; fallback flow")
+
+  let axis = axisForKind(el.kind)
 
   type ChildPlacement = object
     id: string

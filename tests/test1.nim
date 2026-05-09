@@ -444,3 +444,26 @@ test "scroll templates register viewport and floating content":
   check resultLayout.ok
   check resultLayout.rects["sv.content"].h > resultLayout.rects["sv"].h
   check resultLayout.rects["sh.content"].w > resultLayout.rects["sh"].w
+
+test "relay container auto-binds child ids to markdown layout cells":
+  var ui = initUi()
+  ui.layout("root"):
+    discard ui.addWidget(relayElement("root", "| root.header, 20px |\n| root.left, 80px | root.right, * |\n| root.footer, 16px |"))
+    discard ui.box("root.header")
+    discard ui.box("root.left")
+    discard ui.box("root.right")
+    discard ui.box("root.footer")
+
+  ui.addChild("root", "root.header")
+  ui.addChild("root", "root.left")
+  ui.addChild("root", "root.right")
+  ui.addChild("root", "root.footer")
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 300, 200))
+  check resultLayout.ok
+  check resultLayout.rects["root.header"].y == 0
+  check resultLayout.rects["root.header"].h == 20
+  check resultLayout.rects["root.left"].x == 0
+  check resultLayout.rects["root.left"].w == 80
+  check resultLayout.rects["root.right"].x == 80
+  check resultLayout.rects["root.footer"].y == 184

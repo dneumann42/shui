@@ -200,6 +200,15 @@ template hbox*(ui: var UI; id: string; opts = boxOpts(); body: untyped) =
       ui.popBuildParent()
     body
 
+template relay*(ui: var UI; id: string; schema: string; opts = boxOpts(); body: untyped) =
+  block:
+    let parentResolved = ui.currentBuildParent()
+    discard ui.addWidget(relayElement(id, schema, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex), parentResolved)
+    ui.pushBuildParent(id)
+    defer:
+      ui.popBuildParent()
+    body
+
 template panel*(ui: var UI; id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
