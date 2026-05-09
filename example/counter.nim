@@ -1,4 +1,4 @@
-import std/tables
+import std/[tables, strutils]
 import shui
 import shui/uirelay_runtime
 import uirelays/input
@@ -38,9 +38,7 @@ when isMainModule:
             discard ui.button("inc", "Increment", prefSize = size(180, 36), measure = fixed(180, 36))
             discard ui.button("dec", "Decrement", prefSize = size(180, 36), measure = fixed(180, 36))
             discard ui.button("reset", "Reset", prefSize = size(180, 36), measure = fixed(180, 36))
-            ui.hbox("step.row", boxOpts(spacing = 6, align = AlignStretch)):
-              discard ui.button("step.minus", "- Step", prefSize = size(86, 32), measure = fixed(86, 32), expand = true, flex = 1)
-              discard ui.button("step.plus", "+ Step", prefSize = size(86, 32), measure = fixed(86, 32), expand = true, flex = 1)
+            discard ui.comboBox("step.combo", @["1", "2", "5", "10", "20"], selectedIndex = 0, width = 180, itemHeight = 30)
           ui.cardFooter("left.controls.footer"):
             discard ui.text("step.label", "Step", prefSize = size(60, 22))
             discard ui.text("step.value", "1", prefSize = size(40, 22), alignSelf = SelfEnd)
@@ -128,12 +126,18 @@ when isMainModule:
           elif "reset" in frame.rects and frame.rects["reset"].contains(point(ev.x, ev.y)):
             count = 0
             note("- Reset pressed")
-          elif "step.plus" in frame.rects and frame.rects["step.plus"].contains(point(ev.x, ev.y)):
-            step = min(50, step + 1)
-            note("- Step increased")
-          elif "step.minus" in frame.rects and frame.rects["step.minus"].contains(point(ev.x, ev.y)):
-            step = max(1, step - 1)
-            note("- Step decreased")
+          elif comboBoxTriggerId("step.combo") in frame.rects and frame.rects[comboBoxTriggerId("step.combo")].contains(point(ev.x, ev.y)):
+            discard ui.comboBoxToggle("step.combo")
+            note("- Step menu toggled")
+          else:
+            for i in 0 .. 4:
+              let oid = comboBoxOptionId("step.combo", i)
+              if oid in frame.rects and frame.rects[oid].contains(point(ev.x, ev.y)):
+                if ui.comboBoxSelect("step.combo", i):
+                  if comboBoxTriggerId("step.combo") in ui.elements and ui.elements[comboBoxTriggerId("step.combo")].kind == Text:
+                    step = parseInt(ui.elements[comboBoxTriggerId("step.combo")].text)
+                    note("- Step changed")
+                break
           syncValues()
     else:
       discard

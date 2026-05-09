@@ -76,6 +76,11 @@ proc measureNode(ui: UI; id: string; measured: var Table[string, Size];
     return measured[id]
 
   let el = ui.elements[id]
+  if not el.visible:
+    measured[id] = size(0, 0)
+    logs.logLine(logEnabled, fmt"measure hidden id={id} size=0x0")
+    return measured[id]
+
   case el.kind
   of Box, Text:
     var s = el.prefSize
@@ -98,6 +103,11 @@ proc measureNode(ui: UI; id: string; measured: var Table[string, Size];
 
     for childId in ui.childrenById.getOrDefault(id, @[]):
       let child = ui.elements[childId]
+      if not child.visible:
+        continue
+      if child.positionMode == FloatingPosition:
+        discard measureNode(ui, childId, measured, logs, logEnabled)
+        continue
       let childSize = measureNode(ui, childId, measured, logs, logEnabled)
       let childOuter = outerSize(childSize, child.margin)
       main += mainSize(axis, childOuter)
@@ -146,8 +156,10 @@ proc positionFromJustify(justify: Justify; containerMain, usedMain, count, spaci
 proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
                  rects: var Table[string, Rect]; logs: var seq[string];
                  logEnabled: bool) =
-  rects[id] = rect
   let el = ui.elements[id]
+  if not el.visible:
+    return
+  rects[id] = rect
   logs.logLine(logEnabled, fmt"arrange id={id} kind={el.kind} rect=({rect.x},{rect.y},{rect.w},{rect.h})")
   if el.kind == Box or el.kind == Text:
     return
@@ -162,10 +174,16 @@ proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
     allocatedMain: int
 
   var children: seq[ChildPlacement] = @[]
+  var floatingChildren: seq[string] = @[]
   var baseMainSum = 0
   var flexSum = 0
   for childId in ui.childrenById.getOrDefault(id, @[]):
     let child = ui.elements[childId]
+    if not child.visible:
+      continue
+    if child.positionMode == FloatingPosition:
+      floatingChildren.add childId
+      continue
     let base = measured[childId]
     let mainMargins = if axis == Horizontal: child.margin.left + child.margin.right else: child.margin.top + child.margin.bottom
     var baseMain = mainSize(axis, base) + mainMargins
@@ -263,6 +281,36 @@ proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
     cursor += outerMain
     if i < children.len - 1:
       cursor += just.gap
+
+  for childId in floatingChildren:
+    let child = ui.elements[childId]
+    var childSize = measured.getOrDefault(childId, size(0, 0))
+    let target =
+      if child.anchorToId.len > 0 and child.anchorToId in rects:
+        rects[child.anchorToId]
+      else:
+        content
+    var x = target.x
+    var y = target.y
+    case child.anchor
+    of AnchorTopLeft:
+      x = target.x
+      y = target.y
+    of AnchorTopRight:
+      x = target.x + target.w - childSize.w
+      y = target.y
+    of AnchorBottomLeft:
+      x = target.x
+      y = target.y + target.h
+    of AnchorBottomRight:
+      x = target.x + target.w - childSize.w
+      y = target.y + target.h
+    of AnchorCenter:
+      x = target.x + (target.w - childSize.w) div 2
+      y = target.y + (target.h - childSize.h) div 2
+    let childRect = rect(x + child.offsetX, y + child.offsetY, childSize.w, childSize.h)
+    logs.logLine(logEnabled, fmt"arrange floating child id={childId} anchor={child.anchor} target=({target.x},{target.y},{target.w},{target.h}) rect=({childRect.x},{childRect.y},{childRect.w},{childRect.h})")
+    arrangeNode(ui, childId, childRect, measured, rects, logs, logEnabled)
 
 proc layoutInRect*(ui: UI; rootId: string; rootRect: Rect; debugLog = false): LayoutOutcome =
   var logs: seq[string] = @[]

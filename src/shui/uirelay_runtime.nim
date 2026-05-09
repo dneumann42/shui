@@ -110,7 +110,7 @@ proc drawSurface(r: Rect; style: SurfaceStyle; baseColor: Color; cfg: RuntimeCon
     fillRect(r, cfg.panelInnerColor)
     drawBorder(r, cfg.panelBorderColor)
 
-proc drawTree(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font) =
+proc drawNode(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font) =
   if id notin rects:
     return
   let r = rects[id]
@@ -147,17 +147,67 @@ proc drawTree(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
       let ty = r.y + max(0, (r.h - ext.h) div 2)
       discard drawText(font, tx, ty, el.text, cfg.textColor, textBg)
 
+proc drawTreeFlow(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font) =
+  drawNode(ui, id, rects, cfg, font)
+  var flowChildren: seq[string] = @[]
   for childId in ui.childrenById.getOrDefault(id, @[]):
-    drawTree(ui, childId, rects, cfg, font)
+    if ui.elements[childId].positionMode != FloatingPosition:
+      flowChildren.add childId
 
-proc findHoveredControl(ui: UI; id: string; rects: Table[string, Rect]; p: Point): string =
+  for childId in flowChildren:
+    drawTreeFlow(ui, childId, rects, cfg, font)
+
+proc drawFloatingOverlays(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font) =
   for childId in ui.childrenById.getOrDefault(id, @[]):
-    let hit = findHoveredControl(ui, childId, rects, p)
+    if ui.elements[childId].positionMode == FloatingPosition:
+      # Draw the full floating subtree on top.
+      drawTreeFlow(ui, childId, rects, cfg, font)
+      drawFloatingOverlays(ui, childId, rects, cfg, font)
+    else:
+      drawFloatingOverlays(ui, childId, rects, cfg, font)
+
+proc findHoveredControlFlow(ui: UI; id: string; rects: Table[string, Rect]; p: Point): string =
+  var flowChildren: seq[string] = @[]
+  for childId in ui.childrenById.getOrDefault(id, @[]):
+    if ui.elements[childId].positionMode != FloatingPosition:
+      flowChildren.add childId
+
+  for i in countdown(flowChildren.len - 1, 0):
+    let childId = flowChildren[i]
+    let hit = findHoveredControlFlow(ui, childId, rects, p)
     if hit.len > 0:
       return hit
   if id in rects and ui.elements[id].interactivity == ControlElement and rects[id].contains(p):
     return id
   ""
+
+proc findHoveredControlFloating(ui: UI; id: string; rects: Table[string, Rect]; p: Point): string =
+  var floatingChildren: seq[string] = @[]
+  for childId in ui.childrenById.getOrDefault(id, @[]):
+    if ui.elements[childId].positionMode == FloatingPosition:
+      floatingChildren.add childId
+
+  for i in countdown(floatingChildren.len - 1, 0):
+    let childId = floatingChildren[i]
+    let hitFlow = findHoveredControlFlow(ui, childId, rects, p)
+    if hitFlow.len > 0:
+      return hitFlow
+    let hitNested = findHoveredControlFloating(ui, childId, rects, p)
+    if hitNested.len > 0:
+      return hitNested
+
+  for childId in ui.childrenById.getOrDefault(id, @[]):
+    if ui.elements[childId].positionMode != FloatingPosition:
+      let hit = findHoveredControlFloating(ui, childId, rects, p)
+      if hit.len > 0:
+        return hit
+  ""
+
+proc findHoveredControl(ui: UI; rootId: string; rects: Table[string, Rect]; p: Point): string =
+  let top = findHoveredControlFloating(ui, rootId, rects, p)
+  if top.len > 0:
+    return top
+  findHoveredControlFlow(ui, rootId, rects, p)
 
 proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig(); onEvent: RuntimeEventHook = nil) =
   initBackend()
@@ -219,7 +269,8 @@ proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig()
       else:
         ui.hoveredId = ""
       fillRect(rect(0, 0, screenLayout.width, screenLayout.height), cfg.background)
-      drawTree(ui, rootId, frame.rects, cfg, font)
+      drawTreeFlow(ui, rootId, frame.rects, cfg, font)
+      drawFloatingOverlays(ui, rootId, frame.rects, cfg, font)
       refresh()
 
     if cfg.targetFps > 0:

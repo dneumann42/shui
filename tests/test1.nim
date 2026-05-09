@@ -385,3 +385,38 @@ test "card footer lays out children horizontally":
   check resultLayout.ok
   check resultLayout.rects["right"].x > resultLayout.rects["left"].x
   check resultLayout.rects["right"].y == resultLayout.rects["left"].y
+
+test "floating anchor positions container below trigger":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.vbox("root", boxOpts(spacing = 0, align = AlignStart)):
+      discard ui.box("trigger", prefSize = size(100, 20))
+      discard ui.box("menu", prefSize = size(80, 30))
+  ui.setFloating("menu", anchor = AnchorBottomLeft, anchorToId = "trigger", offsetY = 2)
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 300, 200))
+  check resultLayout.ok
+  check resultLayout.rects["menu"].x == resultLayout.rects["trigger"].x
+  check resultLayout.rects["menu"].y == resultLayout.rects["trigger"].y + resultLayout.rects["trigger"].h + 2
+
+test "combobox widget toggles and selects option":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.vbox("root", boxOpts()):
+      discard ui.comboBox("combo", @["A", "B", "C"], selectedIndex = 0, width = 120, itemHeight = 24)
+
+  check "combo.menu" in ui.elements
+  check ui.elements["combo.menu"].positionMode == FloatingPosition
+  check not ui.elements["combo.menu"].visible
+  check ui.elements["combo.indicator"].text == "v"
+
+  ui.clickedId = "combo.trigger"
+  check ui.comboBoxHandleClick("combo")
+  check ui.elements["combo.menu"].visible
+  check ui.elements["combo.indicator"].text == "^"
+
+  ui.clickedId = "combo.opt.2"
+  check ui.comboBoxHandleClick("combo")
+  check not ui.elements["combo.menu"].visible
+  check ui.elements["combo.trigger"].text == "C"
+  check ui.elements["combo.indicator"].text == "v"

@@ -1,3 +1,4 @@
+import std/[strutils, tables]
 import ./elements
 
 type
@@ -37,6 +38,12 @@ proc boxElement*(id: string; margin = zeroSides(); minSize = size(0, 0); prefSiz
     kind: Box,
     interactivity: StaticElement,
     surfaceStyle: SurfaceAuto,
+    visible: true,
+    positionMode: FlowPosition,
+    anchor: AnchorTopLeft,
+    anchorToId: "",
+    offsetX: 0,
+    offsetY: 0,
     margin: margin,
     minSize: minSize,
     prefSize: prefSize,
@@ -53,6 +60,12 @@ proc textElement*(id: string; text: string; margin = zeroSides(); minSize = size
     kind: Text,
     interactivity: StaticElement,
     surfaceStyle: SurfaceAuto,
+    visible: true,
+    positionMode: FlowPosition,
+    anchor: AnchorTopLeft,
+    anchorToId: "",
+    offsetX: 0,
+    offsetY: 0,
     text: text,
     margin: margin,
     minSize: minSize,
@@ -70,6 +83,12 @@ proc vboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacin
     kind: VBox,
     interactivity: StaticElement,
     surfaceStyle: SurfaceAuto,
+    visible: true,
+    positionMode: FlowPosition,
+    anchor: AnchorTopLeft,
+    anchorToId: "",
+    offsetX: 0,
+    offsetY: 0,
     justify: justify,
     align: align,
     spacing: spacing,
@@ -91,6 +110,12 @@ proc hboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacin
     kind: HBox,
     interactivity: StaticElement,
     surfaceStyle: SurfaceAuto,
+    visible: true,
+    positionMode: FlowPosition,
+    anchor: AnchorTopLeft,
+    anchorToId: "",
+    offsetX: 0,
+    offsetY: 0,
     justify: justify,
     align: align,
     spacing: spacing,
@@ -112,6 +137,12 @@ proc relayElement*(id: string; relayLayout: string; justify = JustifyStart; alig
     kind: RelayContainer,
     interactivity: StaticElement,
     surfaceStyle: SurfaceAuto,
+    visible: true,
+    positionMode: FlowPosition,
+    anchor: AnchorTopLeft,
+    anchorToId: "",
+    offsetX: 0,
+    offsetY: 0,
     justify: justify,
     align: align,
     spacing: spacing,
@@ -249,3 +280,104 @@ proc button*(ui: var UI; id: string; label: string; parentId = ""; measure: Intr
   if measure != nil:
     ui.setMeasure(widgetId, measure)
   widgetId
+
+proc attachAdornment*(ui: var UI; hostId, adornId, text: string; prefSize = size(18, 18); anchor = AnchorTopRight; offsetX = -2; offsetY = 0): string =
+  let parentId = ui.parentById.getOrDefault(hostId, "")
+  discard ui.text(adornId, text, parentId = parentId, prefSize = prefSize)
+  ui.setFloating(adornId, anchor = anchor, anchorToId = hostId, offsetX = offsetX, offsetY = offsetY)
+  adornId
+
+proc setAdornmentText*(ui: var UI; adornId, text: string) =
+  if adornId notin ui.elements:
+    return
+  var el = ui.elements[adornId]
+  if el.kind != Text:
+    return
+  el.text = text
+  ui.elements[adornId] = el
+
+proc comboBox*(ui: var UI; id: string; items: openArray[string]; selectedIndex = 0; width = 180; itemHeight = 28): string =
+  let safeIndex =
+    if items.len == 0: -1
+    else: max(0, min(selectedIndex, items.len - 1))
+  let selectedLabel = if safeIndex >= 0: items[safeIndex] else: ""
+
+  discard ui.addWidget(vboxElement(id, JustifyStart, AlignStretch, 0, zeroSides(), zeroSides(), size(0, 0), size(width, itemHeight), size(0, 0), false, 0), resolveParentId(ui, ""))
+  let triggerId = id & ".trigger"
+  discard ui.button(triggerId, selectedLabel, parentId = id, prefSize = size(width, itemHeight))
+  if triggerId in ui.elements:
+    var trigger = ui.elements[triggerId]
+    trigger.surfaceStyle = SurfaceBordered
+    ui.elements[triggerId] = trigger
+  let indicatorId = id & ".indicator"
+  discard ui.attachAdornment(triggerId, indicatorId, "v", prefSize = size(20, itemHeight), anchor = AnchorTopRight, offsetX = -4, offsetY = 0)
+
+  let menuId = id & ".menu"
+  var menu = vboxElement(menuId, JustifyStart, AlignStretch, 2, uniformSides(4), zeroSides(), size(0, 0), size(width, max(0, items.len * itemHeight + 8)), size(0, 0), false, 0)
+  menu.surfaceStyle = SurfaceBordered
+  discard ui.addWidget(menu, id)
+  ui.setFloating(menuId, anchor = AnchorBottomLeft, anchorToId = triggerId, offsetX = 0, offsetY = 2)
+  ui.setVisible(menuId, false)
+
+  for i, item in items:
+    let optId = id & ".opt." & $i
+    discard ui.button(optId, item, parentId = menuId, prefSize = size(width - 8, itemHeight))
+
+  id
+
+proc comboBoxTriggerId*(id: string): string =
+  id & ".trigger"
+
+proc comboBoxMenuId*(id: string): string =
+  id & ".menu"
+
+proc comboBoxOptionId*(id: string; index: int): string =
+  id & ".opt." & $index
+
+proc comboBoxToggle*(ui: var UI; id: string): bool =
+  let menuId = comboBoxMenuId(id)
+  if menuId notin ui.elements:
+    return false
+  let openNow = ui.elements[menuId].visible
+  ui.setVisible(menuId, not openNow)
+  ui.setAdornmentText(id & ".indicator", if openNow: "v" else: "^")
+  true
+
+proc comboBoxSelect*(ui: var UI; id: string; index: int): bool =
+  let triggerId = comboBoxTriggerId(id)
+  let optionId = comboBoxOptionId(id, index)
+  let menuId = comboBoxMenuId(id)
+  if triggerId notin ui.elements or optionId notin ui.elements:
+    return false
+  if ui.elements[triggerId].kind != Text or ui.elements[optionId].kind != Text:
+    return false
+  var trigger = ui.elements[triggerId]
+  trigger.text = ui.elements[optionId].text
+  ui.elements[triggerId] = trigger
+  if menuId in ui.elements:
+    ui.setVisible(menuId, false)
+  ui.setAdornmentText(id & ".indicator", "v")
+  true
+
+proc comboBoxHandleClick*(ui: var UI; id: string): bool =
+  if ui.clickedId.len == 0:
+    return false
+  let triggerId = id & ".trigger"
+  let menuId = id & ".menu"
+  if ui.clickedId == triggerId:
+    let openNow = ui.elements[menuId].visible
+    ui.setVisible(menuId, not openNow)
+    return true
+
+  let optionPrefix = id & ".opt."
+  if ui.clickedId.startsWith(optionPrefix):
+    let selectedId = ui.clickedId
+    if selectedId in ui.elements and triggerId in ui.elements:
+      let selectedLabel = ui.elements[selectedId].text
+      var trigger = ui.elements[triggerId]
+      if trigger.kind == Text:
+        trigger.text = selectedLabel
+        ui.elements[triggerId] = trigger
+    ui.setVisible(menuId, false)
+    return true
+  false

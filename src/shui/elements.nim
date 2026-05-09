@@ -36,6 +36,17 @@ type
     SurfaceFilled
     SurfaceBordered
 
+  PositionMode* = enum
+    FlowPosition
+    FloatingPosition
+
+  AnchorKind* = enum
+    AnchorTopLeft
+    AnchorTopRight
+    AnchorBottomLeft
+    AnchorBottomRight
+    AnchorCenter
+
   ElementKind* = enum
     Box
     Text
@@ -59,6 +70,12 @@ type
     id*: string
     interactivity*: Interactivity
     surfaceStyle*: SurfaceStyle
+    visible*: bool
+    positionMode*: PositionMode
+    anchor*: AnchorKind
+    anchorToId*: string
+    offsetX*: int
+    offsetY*: int
     margin*: Sides
     minSize*: Size
     prefSize*: Size
@@ -116,6 +133,24 @@ proc addElement*(ui: var UI; el: Element) =
   ui.elements[el.id] = el
   if el.id notin ui.childrenById:
     ui.childrenById[el.id] = @[]
+
+proc setVisible*(ui: var UI; id: string; visible: bool) =
+  if id notin ui.elements:
+    return
+  var el = ui.elements[id]
+  el.visible = visible
+  ui.elements[id] = el
+
+proc setFloating*(ui: var UI; id: string; anchor = AnchorBottomLeft; anchorToId = ""; offsetX = 0; offsetY = 0) =
+  if id notin ui.elements:
+    return
+  var el = ui.elements[id]
+  el.positionMode = FloatingPosition
+  el.anchor = anchor
+  el.anchorToId = anchorToId
+  el.offsetX = offsetX
+  el.offsetY = offsetY
+  ui.elements[id] = el
 
 proc setRoot*(ui: var UI; id: string) =
   ui.rootIds.add id
