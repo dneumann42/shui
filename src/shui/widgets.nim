@@ -180,6 +180,17 @@ template panel*(ui: var UI; id: string; style: PanelStyle; opts: BoxOpts; body: 
       ui.popBuildParent()
     body
 
+template panelRow*(ui: var UI; id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
+  block:
+    let parentResolved = ui.currentBuildParent()
+    var el = hboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex)
+    applyPanelStyle(el, style)
+    discard ui.addWidget(el, parentResolved)
+    ui.pushBuildParent(id)
+    defer:
+      ui.popBuildParent()
+    body
+
 template panel*(ui: var UI; id: string; style: PanelStyle; body: untyped) =
   ui.panel(id, style, boxOpts()):
     body
@@ -189,7 +200,7 @@ template card*(ui: var UI; id: string; style: PanelStyle; opts: BoxOpts; body: u
     body
 
 template card*(ui: var UI; id: string; style: PanelStyle; body: untyped) =
-  ui.card(id, style, boxOpts(spacing = 8, padding = uniformSides(12))):
+  ui.card(id, style, boxOpts(spacing = 8, padding = uniformSides(12), align = AlignStretch)):
     body
 
 template cardHeader*(ui: var UI; id: string; opts: BoxOpts; body: untyped) =
@@ -209,7 +220,7 @@ template cardBody*(ui: var UI; id: string; body: untyped) =
     body
 
 template cardFooter*(ui: var UI; id: string; opts: BoxOpts; body: untyped) =
-  ui.panel(id, FilledPanel, opts):
+  ui.panelRow(id, FilledPanel, opts):
     body
 
 template cardFooter*(ui: var UI; id: string; body: untyped) =

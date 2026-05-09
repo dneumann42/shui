@@ -24,14 +24,14 @@ when isMainModule:
 
   ui.layout("root"):
     ui.vbox("root", boxOpts(spacing = 12, padding = uniformSides(12), align = AlignStretch)):
-      ui.card("hero", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(10))):
+      ui.card("hero", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(10), align = AlignStretch)):
         ui.cardHeader("hero.header"):
           discard ui.text("title", "Shui Counter Dashboard", prefSize = size(480, 30), alignSelf = SelfCenter)
         ui.cardBody("hero.body", boxOpts(spacing = 4, padding = uniformSides(6), align = AlignCenter)):
           discard ui.text("subtitle", "Control element hover + card layout stress test", prefSize = size(480, 24), alignSelf = SelfCenter)
 
       ui.hbox("content", boxOpts(spacing = 12, align = AlignStretch, expand = true, flex = 1)):
-        ui.card("left.controls", FilledPanel, boxOpts(spacing = 8, padding = uniformSides(10), prefSize = size(220, 0), expand = true, flex = 1)):
+        ui.card("left.controls", FilledPanel, boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch, prefSize = size(220, 0), expand = true, flex = 1)):
           ui.cardHeader("left.controls.header"):
             discard ui.text("controls.title", "Controls", prefSize = size(180, 24))
           ui.cardBody("left.controls.body", boxOpts(spacing = 6, padding = uniformSides(6), align = AlignStretch)):
@@ -45,33 +45,33 @@ when isMainModule:
             discard ui.text("step.label", "Step", prefSize = size(60, 22))
             discard ui.text("step.value", "1", prefSize = size(40, 22), alignSelf = SelfEnd)
 
-        ui.card("middle.metrics", BorderedPanel, boxOpts(spacing = 8, padding = uniformSides(10), expand = true, flex = 2)):
+        ui.card("middle.metrics", BorderedPanel, boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch, expand = true, flex = 2)):
           ui.cardHeader("middle.metrics.header"):
             discard ui.text("metrics.title", "Metrics", prefSize = size(220, 24), alignSelf = SelfCenter)
           ui.cardBody("middle.metrics.body", boxOpts(spacing = 10, padding = uniformSides(8), align = AlignStretch, expand = true, flex = 1)):
             ui.panel("counter.panel", FilledPanel, boxOpts(spacing = 4, padding = uniformSides(10), align = AlignCenter)):
               discard ui.text("count.value", "0", prefSize = size(180, 54), alignSelf = SelfCenter)
               discard ui.text("count.hint", "Current Count", prefSize = size(180, 20), alignSelf = SelfCenter)
-            ui.hbox("derived.row", boxOpts(spacing = 8, align = AlignStretch, expand = true, flex = 1)):
-              ui.panel("double.panel", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8), expand = true, flex = 1)):
+            ui.hbox("derived.row", boxOpts(spacing = 8, align = AlignStart)):
+              ui.panel("double.panel", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8), prefSize = size(180, 120), expand = true, flex = 1)):
                 discard ui.text("double.label", "Double", prefSize = size(80, 18))
                 discard ui.text("double.value", "0", prefSize = size(80, 28))
-              ui.panel("square.panel", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8), expand = true, flex = 1)):
+              ui.panel("square.panel", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8), prefSize = size(180, 120), expand = true, flex = 1)):
                 discard ui.text("square.label", "Square", prefSize = size(80, 18))
                 discard ui.text("square.value", "0", prefSize = size(80, 28))
 
-        ui.card("right.activity", FilledPanel, boxOpts(spacing = 8, padding = uniformSides(10), prefSize = size(250, 0), expand = true, flex = 1)):
+        ui.card("right.activity", FilledPanel, boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch, prefSize = size(250, 0), expand = true, flex = 1)):
           ui.cardHeader("right.activity.header"):
             discard ui.text("activity.title", "Activity", prefSize = size(180, 24))
           ui.cardBody("right.activity.body", boxOpts(spacing = 6, padding = uniformSides(6), align = AlignStretch)):
-            discard ui.text("activity.1", "- Waiting for input", prefSize = size(220, 22))
-            discard ui.text("activity.2", "- Hover buttons for highlight", prefSize = size(220, 22))
-            discard ui.text("activity.3", "- Click controls to mutate", prefSize = size(220, 22))
+            discard ui.text("activity.1", "- Waiting for input")
+            discard ui.text("activity.2", "- Hover buttons for highlight")
+            discard ui.text("activity.3", "- Click controls to mutate")
 
-      ui.card("footer", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8))):
+      ui.card("footer", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8), align = AlignStretch)):
         ui.cardFooter("footer.row", boxOpts(justify = SpaceBetween, align = AlignCenter, padding = uniformSides(4))):
-          discard ui.text("footer.left", "Layout: cards + header/body/footer + panels", prefSize = size(360, 20))
-          discard ui.text("footer.right", "SDL3 Runtime", prefSize = size(120, 20), alignSelf = SelfEnd)
+          discard ui.text("footer.left", "Layout: cards + header/body/footer + panels", prefSize = size(420, 20))
+          discard ui.text("footer.right", "SDL3 Runtime", prefSize = size(120, 20))
 
   var cfg = defaultRuntimeConfig()
   cfg.title = "Shui Counter Cards"

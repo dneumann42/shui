@@ -372,3 +372,16 @@ test "card helpers set expected surface styles":
   check ui.elements["card1.header"].surfaceStyle == SurfaceFilled
   check ui.elements["card1.body"].surfaceStyle == SurfaceAuto
   check ui.elements["card1.footer"].surfaceStyle == SurfaceFilled
+
+test "card footer lays out children horizontally":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.card("card1", BorderedPanel, boxOpts()):
+      ui.cardFooter("footer", boxOpts(justify = SpaceBetween, align = AlignCenter)):
+        discard ui.text("left", "L", prefSize = size(20, 10))
+        discard ui.text("right", "R", prefSize = size(20, 10))
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 200, 80))
+  check resultLayout.ok
+  check resultLayout.rects["right"].x > resultLayout.rects["left"].x
+  check resultLayout.rects["right"].y == resultLayout.rects["left"].y

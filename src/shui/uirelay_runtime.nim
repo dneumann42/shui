@@ -122,17 +122,25 @@ proc drawTree(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
     drawSurface(r, el.surfaceStyle, cfg.boxColor, cfg)
   of Text:
     let isControl = el.interactivity == ControlElement
-    let bg =
-      if isControl:
-        (if ui.hoveredId == id: cfg.buttonHoverColor else: cfg.buttonColor)
-      else:
-        cfg.textBgColor
-    drawSurface(r, el.surfaceStyle, bg, cfg)
-    let textBg =
+    var textBg = color(0, 0, 0, 0)
+    if isControl:
+      let bg = if ui.hoveredId == id: cfg.buttonHoverColor else: cfg.buttonColor
+      drawSurface(r, el.surfaceStyle, bg, cfg)
+      textBg =
+        case el.surfaceStyle
+        of SurfaceAuto: bg
+        of SurfaceFilled: cfg.panelFillColor
+        of SurfaceBordered: cfg.panelInnerColor
+    else:
       case el.surfaceStyle
-      of SurfaceAuto: bg
-      of SurfaceFilled: cfg.panelFillColor
-      of SurfaceBordered: cfg.panelInnerColor
+      of SurfaceAuto:
+        discard
+      of SurfaceFilled:
+        drawSurface(r, el.surfaceStyle, cfg.textBgColor, cfg)
+        textBg = cfg.panelFillColor
+      of SurfaceBordered:
+        drawSurface(r, el.surfaceStyle, cfg.textBgColor, cfg)
+        textBg = cfg.panelInnerColor
     if font != Font(0):
       let ext = measureText(font, el.text)
       let tx = r.x + max(0, (r.w - ext.w) div 2)
