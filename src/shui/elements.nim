@@ -64,6 +64,7 @@ type
     measureById*: Table[string, IntrinsicMeasureProc]
     parentById*: Table[string, string]
     childrenById*: Table[string, seq[string]]
+    buildStack*: seq[string]
     rootIds*: seq[string]
     regionBindings*: Table[string, string]
 
@@ -82,6 +83,7 @@ proc initUi*(): UI =
     measureById: initTable[string, IntrinsicMeasureProc](),
     parentById: initTable[string, string](),
     childrenById: initTable[string, seq[string]](),
+    buildStack: @[],
     rootIds: @[],
     regionBindings: initTable[string, string](),
   )
@@ -102,6 +104,19 @@ proc addChild*(ui: var UI; parentId, childId: string) =
 
 proc setMeasure*(ui: var UI; id: string; measure: IntrinsicMeasureProc) =
   ui.measureById[id] = measure
+
+proc pushBuildParent*(ui: var UI; id: string) =
+  ui.buildStack.add id
+
+proc popBuildParent*(ui: var UI) =
+  if ui.buildStack.len > 0:
+    discard ui.buildStack.pop()
+
+proc currentBuildParent*(ui: UI): string =
+  if ui.buildStack.len == 0:
+    ""
+  else:
+    ui.buildStack[^1]
 
 proc clampSize*(s, minS, maxS: Size): Size =
   result.w = max(minS.w, s.w)

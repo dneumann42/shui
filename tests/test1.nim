@@ -237,10 +237,10 @@ test "align end positions child at cross-axis end":
 test "dsl hbox vbox constructors build tree and layout":
   var ui = initUi()
   ui.layout("root"):
-    discard ui.vbox("root", spacing = 2, padding = uniformSides(1), align = AlignStretch)
-    discard ui.hbox("row", parentId = "root", spacing = 1, align = AlignStretch)
-    discard ui.box("a", parentId = "row", measure = leafFixed(5, 3))
-    discard ui.text("b", "hello", parentId = "row", measure = leafFixed(7, 4), expand = true, flex = 1)
+    ui.vbox("root", boxOpts(spacing = 2, padding = uniformSides(1), align = AlignStretch)):
+      ui.hbox("row", boxOpts(spacing = 1, align = AlignStretch)):
+        discard ui.box("a", measure = leafFixed(5, 3))
+        discard ui.text("b", "hello", measure = leafFixed(7, 4), expand = true, flex = 1)
 
   let resultLayout = layoutInRect(ui, "root", rect(0, 0, 30, 12))
   check resultLayout.ok
@@ -253,9 +253,9 @@ test "dsl hbox vbox constructors build tree and layout":
 test "text uses ui measure callback and falls back to pref size":
   var ui = initUi()
   ui.layout("root"):
-    discard ui.vbox("root", spacing = 1)
-    discard ui.text("title", "Title", parentId = "root", prefSize = size(3, 2))
-    discard ui.box("avatar", parentId = "root", prefSize = size(1, 1), measure = leafFixed(6, 4))
+    ui.vbox("root", boxOpts(spacing = 1)):
+      discard ui.text("title", "Title", prefSize = size(3, 2))
+      discard ui.box("avatar", prefSize = size(1, 1), measure = leafFixed(6, 4))
 
   let resultLayout = layoutInRect(ui, "root", rect(0, 0, 20, 20))
   check resultLayout.ok
