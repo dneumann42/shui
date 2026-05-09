@@ -420,3 +420,27 @@ test "combobox widget toggles and selects option":
   check not ui.elements["combo.menu"].visible
   check ui.elements["combo.trigger"].text == "C"
   check ui.elements["combo.indicator"].text == "v"
+
+test "scroll templates register viewport and floating content":
+  var ui = initUi()
+  ui.layout("root"):
+    ui.vbox("root", boxOpts()):
+      ui.scrollV("sv", viewportOpts = boxOpts(prefSize = size(120, 80)), contentOpts = boxOpts(spacing = 2)):
+        for i in 0 .. 5:
+          discard ui.button("sv.item." & $i, "Row " & $i, prefSize = size(100, 24))
+      ui.scrollH("sh", viewportOpts = boxOpts(prefSize = size(120, 60)), contentOpts = boxOpts(spacing = 2)):
+        for i in 0 .. 5:
+          discard ui.button("sh.item." & $i, "Col " & $i, prefSize = size(80, 24))
+
+  check "sv" in ui.scrollByViewport
+  check "sh" in ui.scrollByViewport
+  check ui.scrollByViewport["sv"].enableY
+  check ui.scrollByViewport["sh"].enableX
+  check ui.scrollByViewport["sv"].contentId == "sv.content"
+  check ui.elements["sv.content"].positionMode == FloatingPosition
+  check ui.elements["sh.content"].positionMode == FloatingPosition
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 400, 260))
+  check resultLayout.ok
+  check resultLayout.rects["sv.content"].h > resultLayout.rects["sv"].h
+  check resultLayout.rects["sh.content"].w > resultLayout.rects["sh"].w

@@ -4,6 +4,11 @@ import uirelays/[backend, screen, input, coords]
 import ./[elements, layout_engine]
 
 type
+  ScrollDragAxis = enum
+    DragNone
+    DragX
+    DragY
+
   RuntimeConfig* = object
     title*: string
     width*: int
@@ -147,7 +152,93 @@ proc drawNode(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
       let ty = r.y + max(0, (r.h - ext.h) div 2)
       discard drawText(font, tx, ty, el.text, cfg.textColor, textBg)
 
-proc drawTreeFlow(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font) =
+proc rectIntersection(a, b: Rect): Rect =
+  let x0 = max(a.x, b.x)
+  let y0 = max(a.y, b.y)
+  let x1 = min(a.x + a.w, b.x + b.w)
+  let y1 = min(a.y + a.h, b.y + b.h)
+  rect(x0, y0, max(0, x1 - x0), max(0, y1 - y0))
+
+proc maxScroll(viewportLen, contentLen: int): int =
+  max(0, contentLen - viewportLen)
+
+proc computeThumbRect(viewport: Rect; s: ScrollState; contentRect: Rect; horizontal: bool): Rect =
+  let t = max(6, s.thickness)
+  let minThumb = max(8, s.minThumb)
+  if horizontal:
+    let trackW = max(0, viewport.w - (if s.enableY: t else: 0))
+    if trackW <= 0:
+      return rect(viewport.x, viewport.y, 0, 0)
+    let maxOff = maxScroll(viewport.w, contentRect.w)
+    let thumbW =
+      if maxOff == 0: trackW
+      else: max(minThumb, (viewport.w * trackW) div max(1, contentRect.w))
+    let thumbTravel = max(0, trackW - thumbW)
+    let thumbX =
+      if maxOff == 0: viewport.x
+      else: viewport.x + (s.offsetX * thumbTravel) div maxOff
+    return rect(thumbX, viewport.y + viewport.h - t, thumbW, t)
+  else:
+    let trackH = max(0, viewport.h - (if s.enableX: t else: 0))
+    if trackH <= 0:
+      return rect(viewport.x, viewport.y, 0, 0)
+    let maxOff = maxScroll(viewport.h, contentRect.h)
+    let thumbH =
+      if maxOff == 0: trackH
+      else: max(minThumb, (viewport.h * trackH) div max(1, contentRect.h))
+    let thumbTravel = max(0, trackH - thumbH)
+    let thumbY =
+      if maxOff == 0: viewport.y
+      else: viewport.y + (s.offsetY * thumbTravel) div maxOff
+    return rect(viewport.x + viewport.w - t, thumbY, t, thumbH)
+
+proc syncScrollOffsets(ui: var UI; rects: Table[string, Rect]) =
+  for viewportId, scroll in ui.scrollByViewport.mpairs:
+    if viewportId notin rects or scroll.contentId notin rects:
+      continue
+    let viewport = rects[viewportId]
+    let content = rects[scroll.contentId]
+    let maxX = if scroll.enableX: maxScroll(viewport.w, content.w) else: 0
+    let maxY = if scroll.enableY: maxScroll(viewport.h, content.h) else: 0
+    scroll.offsetX = max(0, min(scroll.offsetX, maxX))
+    scroll.offsetY = max(0, min(scroll.offsetY, maxY))
+    if scroll.contentId in ui.elements:
+      ui.setFloating(scroll.contentId, anchor = AnchorTopLeft, anchorToId = viewportId, offsetX = -scroll.offsetX, offsetY = -scroll.offsetY)
+
+proc drawScrollbars(ui: UI; rects: Table[string, Rect]) =
+  for viewportId, scroll in ui.scrollByViewport:
+    if viewportId notin rects or scroll.contentId notin rects:
+      continue
+    let viewport = rects[viewportId]
+    let content = rects[scroll.contentId]
+    if scroll.enableY and content.h > viewport.h:
+      let thumb = computeThumbRect(viewport, scroll, content, horizontal = false)
+      let track = rect(viewport.x + viewport.w - max(6, scroll.thickness), viewport.y, max(6, scroll.thickness), max(0, viewport.h - (if scroll.enableX: max(6, scroll.thickness) else: 0)))
+      fillRect(track, color(44, 50, 62))
+      fillRect(thumb, color(110, 130, 170))
+    if scroll.enableX and content.w > viewport.w:
+      let thumb = computeThumbRect(viewport, scroll, content, horizontal = true)
+      let track = rect(viewport.x, viewport.y + viewport.h - max(6, scroll.thickness), max(0, viewport.w - (if scroll.enableY: max(6, scroll.thickness) else: 0)), max(6, scroll.thickness))
+      fillRect(track, color(44, 50, 62))
+      fillRect(thumb, color(110, 130, 170))
+
+proc isInScrolledContent(ui: UI; id: string): tuple[inside: bool, viewportId: string] =
+  var cur = id
+  while cur.len > 0 and cur in ui.parentById:
+    let parentId = ui.parentById[cur]
+    if parentId in ui.scrollByViewport and ui.scrollByViewport[parentId].contentId == cur:
+      return (true, parentId)
+    cur = parentId
+  (false, "")
+
+proc drawTreeFlow(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font; activeClip: Rect) =
+  var nextClip = activeClip
+  let sc = ui.isInScrolledContent(id)
+  if sc.inside and sc.viewportId in rects:
+    nextClip = rectIntersection(activeClip, rects[sc.viewportId])
+    setClipRect(nextClip)
+  else:
+    setClipRect(activeClip)
   drawNode(ui, id, rects, cfg, font)
   var flowChildren: seq[string] = @[]
   for childId in ui.childrenById.getOrDefault(id, @[]):
@@ -155,18 +246,22 @@ proc drawTreeFlow(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeCo
       flowChildren.add childId
 
   for childId in flowChildren:
-    drawTreeFlow(ui, childId, rects, cfg, font)
+    drawTreeFlow(ui, childId, rects, cfg, font, nextClip)
+  setClipRect(activeClip)
 
-proc drawFloatingOverlays(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font) =
+proc drawFloatingOverlays(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font; activeClip: Rect) =
   for childId in ui.childrenById.getOrDefault(id, @[]):
     if ui.elements[childId].positionMode == FloatingPosition:
       # Draw the full floating subtree on top.
-      drawTreeFlow(ui, childId, rects, cfg, font)
-      drawFloatingOverlays(ui, childId, rects, cfg, font)
+      drawTreeFlow(ui, childId, rects, cfg, font, activeClip)
+      drawFloatingOverlays(ui, childId, rects, cfg, font, activeClip)
     else:
-      drawFloatingOverlays(ui, childId, rects, cfg, font)
+      drawFloatingOverlays(ui, childId, rects, cfg, font, activeClip)
 
 proc findHoveredControlFlow(ui: UI; id: string; rects: Table[string, Rect]; p: Point): string =
+  let sc = ui.isInScrolledContent(id)
+  if sc.inside and sc.viewportId in rects and not rects[sc.viewportId].contains(p):
+    return ""
   var flowChildren: seq[string] = @[]
   for childId in ui.childrenById.getOrDefault(id, @[]):
     if ui.elements[childId].positionMode != FloatingPosition:
@@ -182,6 +277,9 @@ proc findHoveredControlFlow(ui: UI; id: string; rects: Table[string, Rect]; p: P
   ""
 
 proc findHoveredControlFloating(ui: UI; id: string; rects: Table[string, Rect]; p: Point): string =
+  let sc = ui.isInScrolledContent(id)
+  if sc.inside and sc.viewportId in rects and not rects[sc.viewportId].contains(p):
+    return ""
   var floatingChildren: seq[string] = @[]
   for childId in ui.childrenById.getOrDefault(id, @[]):
     if ui.elements[childId].positionMode == FloatingPosition:
@@ -227,6 +325,10 @@ proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig()
   var running = true
   var mouseX = -1
   var mouseY = -1
+  var dragViewport = ""
+  var dragAxis = DragNone
+  var dragStartMouse = 0
+  var dragStartOffset = 0
   while running:
     var ev: Event
     while pollEvent(ev):
@@ -249,11 +351,65 @@ proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig()
           else:
             layoutInRect(ui, rootId, rect(0, 0, screenLayout.width, screenLayout.height))
         if frameNow.ok:
-          ui.clickedId = findHoveredControl(ui, rootId, frameNow.rects, point(ev.x, ev.y))
+          ui.syncScrollOffsets(frameNow.rects)
+          for viewportId, scroll in ui.scrollByViewport:
+            if viewportId notin frameNow.rects or scroll.contentId notin frameNow.rects:
+              continue
+            let p = point(ev.x, ev.y)
+            if scroll.enableY:
+              let thumbY = computeThumbRect(frameNow.rects[viewportId], scroll, frameNow.rects[scroll.contentId], horizontal = false)
+              if thumbY.w > 0 and thumbY.h > 0 and thumbY.contains(p):
+                dragViewport = viewportId
+                dragAxis = DragY
+                dragStartMouse = ev.y
+                dragStartOffset = scroll.offsetY
+                ui.clickedId = ""
+                break
+            if scroll.enableX:
+              let thumbX = computeThumbRect(frameNow.rects[viewportId], scroll, frameNow.rects[scroll.contentId], horizontal = true)
+              if thumbX.w > 0 and thumbX.h > 0 and thumbX.contains(p):
+                dragViewport = viewportId
+                dragAxis = DragX
+                dragStartMouse = ev.x
+                dragStartOffset = scroll.offsetX
+                ui.clickedId = ""
+                break
+          if dragAxis != DragNone:
+            discard
+          else:
+            ui.clickedId = findHoveredControl(ui, rootId, frameNow.rects, point(ev.x, ev.y))
         else:
           ui.clickedId = ""
       elif ev.kind == MouseUpEvent and ev.button == LeftButton:
         ui.clickedId = ""
+        dragViewport = ""
+        dragAxis = DragNone
+      elif ev.kind == MouseMoveEvent and dragAxis != DragNone and dragViewport in ui.scrollByViewport:
+        let frameNow =
+          if cfg.relayLayoutSrc.len > 0:
+            layoutWithUirelays(ui, cfg.relayLayoutSrc, screenLayout.width, screenLayout.height, cfg.lineHeight, cfg.padding, cfg.gap)
+          else:
+            layoutInRect(ui, rootId, rect(0, 0, screenLayout.width, screenLayout.height))
+        if frameNow.ok and dragViewport in frameNow.rects:
+          var s = ui.scrollByViewport[dragViewport]
+          if s.contentId in frameNow.rects:
+            let vp = frameNow.rects[dragViewport]
+            let ct = frameNow.rects[s.contentId]
+            if dragAxis == DragY:
+              let thumb = computeThumbRect(vp, s, ct, horizontal = false)
+              let trackH = max(1, (vp.h - (if s.enableX: max(6, s.thickness) else: 0)) - thumb.h)
+              let maxY = maxScroll(vp.h, ct.h)
+              if maxY > 0 and trackH > 0:
+                let deltaPx = ev.y - dragStartMouse
+                s.offsetY = max(0, min(maxY, dragStartOffset + (deltaPx * maxY) div trackH))
+            else:
+              let thumb = computeThumbRect(vp, s, ct, horizontal = true)
+              let trackW = max(1, (vp.w - (if s.enableY: max(6, s.thickness) else: 0)) - thumb.w)
+              let maxX = maxScroll(vp.w, ct.w)
+              if maxX > 0 and trackW > 0:
+                let deltaPx = ev.x - dragStartMouse
+                s.offsetX = max(0, min(maxX, dragStartOffset + (deltaPx * maxX) div trackW))
+            ui.scrollByViewport[dragViewport] = s
 
       if onEvent != nil:
         onEvent(ev, ui, running)
@@ -264,13 +420,18 @@ proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig()
       else:
         layoutInRect(ui, rootId, rect(0, 0, screenLayout.width, screenLayout.height))
     if frame.ok:
+      ui.syncScrollOffsets(frame.rects)
       if mouseX >= 0 and mouseY >= 0:
         ui.hoveredId = findHoveredControl(ui, rootId, frame.rects, point(mouseX, mouseY))
       else:
         ui.hoveredId = ""
+      let fullClip = rect(0, 0, screenLayout.width, screenLayout.height)
+      setClipRect(fullClip)
       fillRect(rect(0, 0, screenLayout.width, screenLayout.height), cfg.background)
-      drawTreeFlow(ui, rootId, frame.rects, cfg, font)
-      drawFloatingOverlays(ui, rootId, frame.rects, cfg, font)
+      drawTreeFlow(ui, rootId, frame.rects, cfg, font, fullClip)
+      drawFloatingOverlays(ui, rootId, frame.rects, cfg, font, fullClip)
+      drawScrollbars(ui, frame.rects)
+      setClipRect(fullClip)
       refresh()
 
     if cfg.targetFps > 0:

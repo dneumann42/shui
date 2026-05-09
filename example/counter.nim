@@ -38,7 +38,7 @@ when isMainModule:
             discard ui.button("inc", "Increment", prefSize = size(180, 36), measure = fixed(180, 36))
             discard ui.button("dec", "Decrement", prefSize = size(180, 36), measure = fixed(180, 36))
             discard ui.button("reset", "Reset", prefSize = size(180, 36), measure = fixed(180, 36))
-            discard ui.comboBox("step.combo", @["1", "2", "5", "10", "20"], selectedIndex = 0, width = 180, itemHeight = 30)
+            discard ui.comboBox("step.combo", @["1", "2", "5", "10", "20", "40", "80", "160"], selectedIndex = 0, width = 180, itemHeight = 30)
           ui.cardFooter("left.controls.footer"):
             discard ui.text("step.label", "Step", prefSize = size(60, 22))
             discard ui.text("step.value", "1", prefSize = size(40, 22), alignSelf = SelfEnd)
@@ -57,6 +57,18 @@ when isMainModule:
               ui.panel("square.panel", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8), prefSize = size(180, 120), expand = true, flex = 1)):
                 discard ui.text("square.label", "Square", prefSize = size(80, 18))
                 discard ui.text("square.value", "0", prefSize = size(80, 28))
+
+            ui.panel("vscroll.panel", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(6), prefSize = size(0, 180), align = AlignStretch, expand = true, flex = 1)):
+              discard ui.text("vscroll.title", "Vertical Scroll List", prefSize = size(200, 20))
+              ui.scrollV("vscroll.list", viewportOpts = boxOpts(prefSize = size(0, 140), expand = true, flex = 1, align = AlignStretch), contentOpts = boxOpts(spacing = 4, padding = uniformSides(4), align = AlignStretch)):
+                for i in 0 .. 24:
+                  discard ui.button("v.item." & $i, "Item " & $(i + 1), prefSize = size(180, 26))
+
+            ui.panel("hscroll.panel", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(6), prefSize = size(0, 160), align = AlignStretch)):
+              discard ui.text("hscroll.title", "Horizontal Scroll List", prefSize = size(220, 20))
+              ui.scrollH("hscroll.list", viewportOpts = boxOpts(prefSize = size(0, 112), align = AlignStretch), contentOpts = boxOpts(spacing = 6, padding = uniformSides(4), align = AlignCenter)):
+                for i in 0 .. 15:
+                  discard ui.button("h.item." & $i, "Card " & $(i + 1), prefSize = size(120, 72))
 
         ui.card("right.activity", FilledPanel, boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch, prefSize = size(250, 0), expand = true, flex = 1)):
           ui.cardHeader("right.activity.header"):
@@ -130,7 +142,7 @@ when isMainModule:
             discard ui.comboBoxToggle("step.combo")
             note("- Step menu toggled")
           else:
-            for i in 0 .. 4:
+            for i in 0 .. 8:
               let oid = comboBoxOptionId("step.combo", i)
               if oid in frame.rects and frame.rects[oid].contains(point(ev.x, ev.y)):
                 if ui.comboBoxSelect("step.combo", i):

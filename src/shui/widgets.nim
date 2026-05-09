@@ -381,3 +381,36 @@ proc comboBoxHandleClick*(ui: var UI; id: string): bool =
     ui.setVisible(menuId, false)
     return true
   false
+
+proc scrollContentId*(id: string): string =
+  id & ".content"
+
+template scrollV*(ui: var UI; id: string; viewportOpts = boxOpts(); contentOpts = boxOpts(spacing = 4, align = AlignStretch); body: untyped) =
+  block:
+    let parentResolved = ui.currentBuildParent()
+    var viewport = vboxElement(id, viewportOpts.justify, viewportOpts.align, viewportOpts.spacing, viewportOpts.padding, viewportOpts.margin, viewportOpts.minSize, viewportOpts.prefSize, viewportOpts.maxSize, viewportOpts.expand, viewportOpts.flex)
+    viewport.alignSelf = SelfStretch
+    discard ui.addWidget(viewport, parentResolved)
+    let contentId = scrollContentId(id)
+    discard ui.addWidget(vboxElement(contentId, contentOpts.justify, contentOpts.align, contentOpts.spacing, contentOpts.padding, contentOpts.margin, contentOpts.minSize, contentOpts.prefSize, contentOpts.maxSize, contentOpts.expand, contentOpts.flex), id)
+    ui.setFloating(contentId, anchor = AnchorTopLeft, anchorToId = id, offsetX = 0, offsetY = 0)
+    ui.registerScroll(id, contentId, enableX = false, enableY = true)
+    ui.pushBuildParent(contentId)
+    defer:
+      ui.popBuildParent()
+    body
+
+template scrollH*(ui: var UI; id: string; viewportOpts = boxOpts(); contentOpts = boxOpts(spacing = 4, align = AlignStretch); body: untyped) =
+  block:
+    let parentResolved = ui.currentBuildParent()
+    var viewport = hboxElement(id, viewportOpts.justify, viewportOpts.align, viewportOpts.spacing, viewportOpts.padding, viewportOpts.margin, viewportOpts.minSize, viewportOpts.prefSize, viewportOpts.maxSize, viewportOpts.expand, viewportOpts.flex)
+    viewport.alignSelf = SelfStretch
+    discard ui.addWidget(viewport, parentResolved)
+    let contentId = scrollContentId(id)
+    discard ui.addWidget(hboxElement(contentId, contentOpts.justify, contentOpts.align, contentOpts.spacing, contentOpts.padding, contentOpts.margin, contentOpts.minSize, contentOpts.prefSize, contentOpts.maxSize, contentOpts.expand, contentOpts.flex), id)
+    ui.setFloating(contentId, anchor = AnchorTopLeft, anchorToId = id, offsetX = 0, offsetY = 0)
+    ui.registerScroll(id, contentId, enableX = true, enableY = false)
+    ui.pushBuildParent(contentId)
+    defer:
+      ui.popBuildParent()
+    body

@@ -2,6 +2,15 @@ import std/[tables]
 import uirelays/coords
 
 type
+  ScrollState* = object
+    contentId*: string
+    enableX*: bool
+    enableY*: bool
+    offsetX*: int
+    offsetY*: int
+    thickness*: int
+    minThumb*: int
+
   Axis* = enum
     Horizontal
     Vertical
@@ -106,6 +115,7 @@ type
     clickedId*: string
     rootIds*: seq[string]
     regionBindings*: Table[string, string]
+    scrollByViewport*: Table[string, ScrollState]
 
 proc zeroSides*(): Sides =
   Sides(top: 0, right: 0, bottom: 0, left: 0)
@@ -127,6 +137,7 @@ proc initUi*(): UI =
     clickedId: "",
     rootIds: @[],
     regionBindings: initTable[string, string](),
+    scrollByViewport: initTable[string, ScrollState](),
   )
 
 proc addElement*(ui: var UI; el: Element) =
@@ -163,6 +174,25 @@ proc addChild*(ui: var UI; parentId, childId: string) =
 
 proc setMeasure*(ui: var UI; id: string; measure: IntrinsicMeasureProc) =
   ui.measureById[id] = measure
+
+proc registerScroll*(ui: var UI; viewportId, contentId: string; enableX, enableY: bool; thickness = 12; minThumb = 18) =
+  ui.scrollByViewport[viewportId] = ScrollState(
+    contentId: contentId,
+    enableX: enableX,
+    enableY: enableY,
+    offsetX: 0,
+    offsetY: 0,
+    thickness: thickness,
+    minThumb: minThumb,
+  )
+
+proc setScrollOffset*(ui: var UI; viewportId: string; offsetX, offsetY: int) =
+  if viewportId notin ui.scrollByViewport:
+    return
+  var s = ui.scrollByViewport[viewportId]
+  s.offsetX = offsetX
+  s.offsetY = offsetY
+  ui.scrollByViewport[viewportId] = s
 
 proc pushBuildParent*(ui: var UI; id: string) =
   ui.buildStack.add id

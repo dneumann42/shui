@@ -125,6 +125,9 @@ proc measureNode(ui: UI; id: string; measured: var Table[string, Size];
       w: content.w + el.padding.left + el.padding.right,
       h: content.h + el.padding.top + el.padding.bottom,
     )
+    # Container preferred size is a lower bound before min/max clamping.
+    box.w = max(box.w, el.prefSize.w)
+    box.h = max(box.h, el.prefSize.h)
 
     box = clampSize(box, el.minSize, el.maxSize)
     measured[id] = box
