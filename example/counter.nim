@@ -89,9 +89,11 @@ when isMainModule:
           discard ui.text("footer.right", "SDL3 Runtime", prefSize = size(120, 20))
 
       ui.dialog("about.dialog", title = "About Shui", showHeader = true, showClose = true, opts = boxOpts(prefSize = size(520, 280), spacing = 8, padding = uniformSides(8))):
-        discard ui.text("about.line1", "This is a floating dialog widget.", prefSize = size(420, 26))
-        discard ui.text("about.line2", "When open, non-floating controls are non-interactive.", prefSize = size(460, 26))
-        discard ui.text("about.line3", "Use the Close button or footer action.", prefSize = size(360, 26))
+        ui.vbox("about.dialog.body.top", boxOpts(spacing = 8, align = AlignStretch)):
+          discard ui.text("about.line1", "This is a floating dialog widget.", prefSize = size(420, 26))
+          discard ui.text("about.line2", "When open, non-floating controls are non-interactive.", prefSize = size(460, 26))
+          discard ui.text("about.line3", "Use the Close button or footer action.", prefSize = size(360, 26))
+        discard ui.box("about.dialog.body.spacer", expand = true, flex = 1)
         ui.dialogFooter("about.dialog.footer", boxOpts(justify = SpaceBetween, align = AlignCenter, padding = uniformSides(6))):
           discard ui.text("about.state", "Dialog is open", prefSize = size(180, 24))
           discard ui.button("about.dismiss", "Dismiss", prefSize = size(96, 30))
