@@ -142,6 +142,21 @@ proc initUi*(): UI =
     openDialogs: @[],
   )
 
+proc beginFrame*(ui: var UI) =
+  let hoveredId = ui.hoveredId
+  let clickedId = ui.clickedId
+  ui.elements.clear()
+  ui.measureById.clear()
+  ui.parentById.clear()
+  ui.childrenById.clear()
+  ui.buildStack.setLen(0)
+  ui.rootIds.setLen(0)
+  ui.regionBindings.clear()
+  ui.scrollByViewport.clear()
+  ui.openDialogs.setLen(0)
+  ui.hoveredId = hoveredId
+  ui.clickedId = clickedId
+
 proc addElement*(ui: var UI; el: Element) =
   ui.elements[el.id] = el
   if el.id notin ui.childrenById:

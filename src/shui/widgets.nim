@@ -319,7 +319,7 @@ proc comboBox*(ui: var UI; id: string; items: openArray[string]; selectedIndex =
     trigger.surfaceStyle = SurfaceBordered
     ui.elements[triggerId] = trigger
   let indicatorId = id & ".indicator"
-  discard ui.attachAdornment(triggerId, indicatorId, "v", prefSize = size(20, itemHeight), anchor = AnchorTopRight, offsetX = -4, offsetY = 0)
+  discard ui.attachAdornment(triggerId, indicatorId, "<>", prefSize = size(20, itemHeight), anchor = AnchorTopRight, offsetX = -4, offsetY = 0)
 
   let menuId = id & ".menu"
   var menu = vboxElement(menuId, JustifyStart, AlignStretch, 2, uniformSides(4), zeroSides(), size(0, 0), size(width, max(0, items.len * itemHeight + 8)), size(0, 0), false, 0)
@@ -349,7 +349,7 @@ proc comboBoxToggle*(ui: var UI; id: string): bool =
     return false
   let openNow = ui.elements[menuId].visible
   ui.setVisible(menuId, not openNow)
-  ui.setAdornmentText(id & ".indicator", if openNow: "v" else: "^")
+  ui.setAdornmentText(id & ".indicator", if openNow: "<>" else: "><")
   true
 
 proc comboBoxSelect*(ui: var UI; id: string; index: int): bool =
@@ -365,7 +365,7 @@ proc comboBoxSelect*(ui: var UI; id: string; index: int): bool =
   ui.elements[triggerId] = trigger
   if menuId in ui.elements:
     ui.setVisible(menuId, false)
-  ui.setAdornmentText(id & ".indicator", "v")
+  ui.setAdornmentText(id & ".indicator", "><")
   true
 
 proc comboBoxHandleClick*(ui: var UI; id: string): bool =

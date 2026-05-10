@@ -1,6 +1,8 @@
 import std/[tables]
 import std/os as stdos
-import uirelays/[backend, screen, input, coords]
+import uirelays/[screen, input, coords]
+when not defined(shuiHostedOnly):
+  import uirelays/backend
 import ./[elements, layout_engine]
 
 type
@@ -33,6 +35,14 @@ type
 
   RuntimeEventHook* = proc(ev: Event; ui: var UI; running: var bool) {.closure.}
 
+  HostedUiState* = object
+    mouseX*: int
+    mouseY*: int
+    dragViewport: string
+    dragAxis: ScrollDragAxis
+    dragStartMouse: int
+    dragStartOffset: int
+
 proc defaultRuntimeConfig*(): RuntimeConfig =
   RuntimeConfig(
     title: "shui",
@@ -57,7 +67,10 @@ proc defaultRuntimeConfig*(): RuntimeConfig =
     relayLayoutSrc: "",
   )
 
-proc ensureTextMeasures(ui: var UI; f: Font) =
+proc initHostedUiState*(): HostedUiState =
+  HostedUiState(mouseX: -1, mouseY: -1)
+
+proc ensureTextMeasures*(ui: var UI; f: Font) =
   if f == Font(0):
     return
   for id, el in ui.elements:
@@ -313,8 +326,129 @@ proc findHoveredControl(ui: UI; rootId: string; rects: Table[string, Rect]; p: P
 proc hitTestControlId*(ui: UI; rootId: string; rects: Table[string, Rect]; p: Point): string =
   findHoveredControl(ui, rootId, rects, p)
 
+proc layoutFrame*(
+  ui: var UI;
+  rootId: string;
+  width, height: int;
+  cfg = defaultRuntimeConfig()
+): LayoutOutcome =
+  result =
+    if cfg.relayLayoutSrc.len > 0:
+      layoutWithUirelays(ui, cfg.relayLayoutSrc, width, height, cfg.lineHeight, cfg.padding, cfg.gap)
+    else:
+      layoutInRect(ui, rootId, rect(0, 0, width, height))
+  if result.ok:
+    ui.syncScrollOffsets(result.rects)
+
+proc updateHovered*(
+  ui: var UI;
+  state: HostedUiState;
+  rootId: string;
+  frame: LayoutOutcome
+) =
+  if frame.ok and state.mouseX >= 0 and state.mouseY >= 0:
+    ui.hoveredId = findHoveredControl(ui, rootId, frame.rects, point(state.mouseX, state.mouseY))
+  else:
+    ui.hoveredId = ""
+
+proc handleEvent*(
+  ui: var UI;
+  state: var HostedUiState;
+  rootId: string;
+  cfg: RuntimeConfig;
+  ev: Event;
+  width, height: int;
+  clearClickOnMouseUp = true
+): bool =
+  case ev.kind
+  of MouseMoveEvent, MouseDownEvent, MouseUpEvent:
+    state.mouseX = ev.x
+    state.mouseY = ev.y
+  else:
+    discard
+
+  if ev.kind == MouseDownEvent and ev.button == LeftButton:
+    let frameNow = ui.layoutFrame(rootId, width, height, cfg)
+    if frameNow.ok:
+      for viewportId, scroll in ui.scrollByViewport:
+        if viewportId notin frameNow.rects or scroll.contentId notin frameNow.rects:
+          continue
+        let p = point(ev.x, ev.y)
+        if scroll.enableY:
+          let thumbY = computeThumbRect(frameNow.rects[viewportId], scroll, frameNow.rects[scroll.contentId], horizontal = false)
+          if thumbY.w > 0 and thumbY.h > 0 and thumbY.contains(p):
+            state.dragViewport = viewportId
+            state.dragAxis = DragY
+            state.dragStartMouse = ev.y
+            state.dragStartOffset = scroll.offsetY
+            ui.clickedId = ""
+            return true
+        if scroll.enableX:
+          let thumbX = computeThumbRect(frameNow.rects[viewportId], scroll, frameNow.rects[scroll.contentId], horizontal = true)
+          if thumbX.w > 0 and thumbX.h > 0 and thumbX.contains(p):
+            state.dragViewport = viewportId
+            state.dragAxis = DragX
+            state.dragStartMouse = ev.x
+            state.dragStartOffset = scroll.offsetX
+            ui.clickedId = ""
+            return true
+      ui.clickedId = findHoveredControl(ui, rootId, frameNow.rects, point(ev.x, ev.y))
+      return ui.clickedId.len > 0
+    ui.clickedId = ""
+  elif ev.kind == MouseUpEvent and ev.button == LeftButton:
+    if clearClickOnMouseUp:
+      ui.clickedId = ""
+    state.dragViewport = ""
+    state.dragAxis = DragNone
+  elif ev.kind == MouseMoveEvent and state.dragAxis != DragNone and state.dragViewport in ui.scrollByViewport:
+    let frameNow = ui.layoutFrame(rootId, width, height, cfg)
+    if frameNow.ok and state.dragViewport in frameNow.rects:
+      var s = ui.scrollByViewport[state.dragViewport]
+      if s.contentId in frameNow.rects:
+        let vp = frameNow.rects[state.dragViewport]
+        let ct = frameNow.rects[s.contentId]
+        if state.dragAxis == DragY:
+          let thumb = computeThumbRect(vp, s, ct, horizontal = false)
+          let trackH = max(1, (vp.h - (if s.enableX: max(6, s.thickness) else: 0)) - thumb.h)
+          let maxY = maxScroll(vp.h, ct.h)
+          if maxY > 0 and trackH > 0:
+            let deltaPx = ev.y - state.dragStartMouse
+            s.offsetY = max(0, min(maxY, state.dragStartOffset + (deltaPx * maxY) div trackH))
+        else:
+          let thumb = computeThumbRect(vp, s, ct, horizontal = true)
+          let trackW = max(1, (vp.w - (if s.enableY: max(6, s.thickness) else: 0)) - thumb.w)
+          let maxX = maxScroll(vp.w, ct.w)
+          if maxX > 0 and trackW > 0:
+            let deltaPx = ev.x - state.dragStartMouse
+            s.offsetX = max(0, min(maxX, state.dragStartOffset + (deltaPx * maxX) div trackW))
+        ui.scrollByViewport[state.dragViewport] = s
+      return true
+
+  false
+
+proc drawFrame*(
+  ui: UI;
+  rootId: string;
+  frame: LayoutOutcome;
+  cfg: RuntimeConfig;
+  font: Font;
+  width, height: int
+) =
+  if not frame.ok:
+    return
+  let fullClip = rect(0, 0, width, height)
+  setClipRect(fullClip)
+  fillRect(fullClip, cfg.background)
+  drawTreeFlow(ui, rootId, frame.rects, cfg, font, fullClip)
+  drawFloatingOverlays(ui, rootId, frame.rects, cfg, font, fullClip)
+  drawScrollbars(ui, frame.rects)
+  setClipRect(fullClip)
+
 proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig(); onEvent: RuntimeEventHook = nil) =
-  initBackend()
+  when defined(shuiHostedOnly):
+    raise newException(CatchableError, "runUirelayRuntime is unavailable when compiled with -d:shuiHostedOnly")
+  else:
+    initBackend()
 
   var screenLayout = createWindow(cfg.width, cfg.height)
   setWindowTitle(cfg.title)
@@ -329,12 +463,7 @@ proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig()
     echo "[shui] no usable font found; set cfg.fontPath or SHUI_FONT_PATH for text rendering"
 
   var running = true
-  var mouseX = -1
-  var mouseY = -1
-  var dragViewport = ""
-  var dragAxis = DragNone
-  var dragStartMouse = 0
-  var dragStartOffset = 0
+  var hosted = initHostedUiState()
   while running:
     var ev: Event
     while pollEvent(ev):
@@ -344,100 +473,18 @@ proc runUirelayRuntime*(ui: var UI; rootId: string; cfg = defaultRuntimeConfig()
       of WindowResizeEvent:
         screenLayout.width = ev.x
         screenLayout.height = ev.y
-      of MouseMoveEvent, MouseDownEvent, MouseUpEvent:
-        mouseX = ev.x
-        mouseY = ev.y
       else:
         discard
 
-      if ev.kind == MouseDownEvent and ev.button == LeftButton:
-        let frameNow =
-          if cfg.relayLayoutSrc.len > 0:
-            layoutWithUirelays(ui, cfg.relayLayoutSrc, screenLayout.width, screenLayout.height, cfg.lineHeight, cfg.padding, cfg.gap)
-          else:
-            layoutInRect(ui, rootId, rect(0, 0, screenLayout.width, screenLayout.height))
-        if frameNow.ok:
-          ui.syncScrollOffsets(frameNow.rects)
-          for viewportId, scroll in ui.scrollByViewport:
-            if viewportId notin frameNow.rects or scroll.contentId notin frameNow.rects:
-              continue
-            let p = point(ev.x, ev.y)
-            if scroll.enableY:
-              let thumbY = computeThumbRect(frameNow.rects[viewportId], scroll, frameNow.rects[scroll.contentId], horizontal = false)
-              if thumbY.w > 0 and thumbY.h > 0 and thumbY.contains(p):
-                dragViewport = viewportId
-                dragAxis = DragY
-                dragStartMouse = ev.y
-                dragStartOffset = scroll.offsetY
-                ui.clickedId = ""
-                break
-            if scroll.enableX:
-              let thumbX = computeThumbRect(frameNow.rects[viewportId], scroll, frameNow.rects[scroll.contentId], horizontal = true)
-              if thumbX.w > 0 and thumbX.h > 0 and thumbX.contains(p):
-                dragViewport = viewportId
-                dragAxis = DragX
-                dragStartMouse = ev.x
-                dragStartOffset = scroll.offsetX
-                ui.clickedId = ""
-                break
-          if dragAxis != DragNone:
-            discard
-          else:
-            ui.clickedId = findHoveredControl(ui, rootId, frameNow.rects, point(ev.x, ev.y))
-        else:
-          ui.clickedId = ""
-      elif ev.kind == MouseUpEvent and ev.button == LeftButton:
-        ui.clickedId = ""
-        dragViewport = ""
-        dragAxis = DragNone
-      elif ev.kind == MouseMoveEvent and dragAxis != DragNone and dragViewport in ui.scrollByViewport:
-        let frameNow =
-          if cfg.relayLayoutSrc.len > 0:
-            layoutWithUirelays(ui, cfg.relayLayoutSrc, screenLayout.width, screenLayout.height, cfg.lineHeight, cfg.padding, cfg.gap)
-          else:
-            layoutInRect(ui, rootId, rect(0, 0, screenLayout.width, screenLayout.height))
-        if frameNow.ok and dragViewport in frameNow.rects:
-          var s = ui.scrollByViewport[dragViewport]
-          if s.contentId in frameNow.rects:
-            let vp = frameNow.rects[dragViewport]
-            let ct = frameNow.rects[s.contentId]
-            if dragAxis == DragY:
-              let thumb = computeThumbRect(vp, s, ct, horizontal = false)
-              let trackH = max(1, (vp.h - (if s.enableX: max(6, s.thickness) else: 0)) - thumb.h)
-              let maxY = maxScroll(vp.h, ct.h)
-              if maxY > 0 and trackH > 0:
-                let deltaPx = ev.y - dragStartMouse
-                s.offsetY = max(0, min(maxY, dragStartOffset + (deltaPx * maxY) div trackH))
-            else:
-              let thumb = computeThumbRect(vp, s, ct, horizontal = true)
-              let trackW = max(1, (vp.w - (if s.enableY: max(6, s.thickness) else: 0)) - thumb.w)
-              let maxX = maxScroll(vp.w, ct.w)
-              if maxX > 0 and trackW > 0:
-                let deltaPx = ev.x - dragStartMouse
-                s.offsetX = max(0, min(maxX, dragStartOffset + (deltaPx * maxX) div trackW))
-            ui.scrollByViewport[dragViewport] = s
+      discard ui.handleEvent(hosted, rootId, cfg, ev, screenLayout.width, screenLayout.height)
 
       if onEvent != nil:
         onEvent(ev, ui, running)
 
-    let frame =
-      if cfg.relayLayoutSrc.len > 0:
-        layoutWithUirelays(ui, cfg.relayLayoutSrc, screenLayout.width, screenLayout.height, cfg.lineHeight, cfg.padding, cfg.gap)
-      else:
-        layoutInRect(ui, rootId, rect(0, 0, screenLayout.width, screenLayout.height))
+    let frame = ui.layoutFrame(rootId, screenLayout.width, screenLayout.height, cfg)
     if frame.ok:
-      ui.syncScrollOffsets(frame.rects)
-      if mouseX >= 0 and mouseY >= 0:
-        ui.hoveredId = findHoveredControl(ui, rootId, frame.rects, point(mouseX, mouseY))
-      else:
-        ui.hoveredId = ""
-      let fullClip = rect(0, 0, screenLayout.width, screenLayout.height)
-      setClipRect(fullClip)
-      fillRect(rect(0, 0, screenLayout.width, screenLayout.height), cfg.background)
-      drawTreeFlow(ui, rootId, frame.rects, cfg, font, fullClip)
-      drawFloatingOverlays(ui, rootId, frame.rects, cfg, font, fullClip)
-      drawScrollbars(ui, frame.rects)
-      setClipRect(fullClip)
+      ui.updateHovered(hosted, rootId, frame)
+      ui.drawFrame(rootId, frame, cfg, font, screenLayout.width, screenLayout.height)
       refresh()
 
     if cfg.targetFps > 0:
