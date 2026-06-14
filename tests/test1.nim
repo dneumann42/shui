@@ -37,6 +37,7 @@ test "vbox measure includes padding spacing and margins":
   ui.addElement(Element(
     id: "root",
     kind: VBox,
+    visible: true,
     spacing: 5,
     padding: uniformSides(2),
     justify: JustifyStart,
@@ -48,6 +49,7 @@ test "vbox measure includes padding spacing and margins":
   ui.addElement(Element(
     id: "a",
     kind: Box,
+    visible: true,
     margin: Sides(top: 1, right: 2, bottom: 3, left: 4),
     minSize: size(0, 0),
     maxSize: size(0, 0),
@@ -57,6 +59,7 @@ test "vbox measure includes padding spacing and margins":
   ui.addElement(Element(
     id: "b",
     kind: Box,
+    visible: true,
     margin: Sides(top: 0, right: 1, bottom: 1, left: 1),
     minSize: size(0, 0),
     maxSize: size(0, 0),
@@ -81,6 +84,7 @@ test "hbox expand child gets remaining main-axis space":
   ui.addElement(Element(
     id: "root",
     kind: HBox,
+    visible: true,
     spacing: 2,
     justify: JustifyStart,
     align: AlignStretch,
@@ -91,6 +95,7 @@ test "hbox expand child gets remaining main-axis space":
   ui.addElement(Element(
     id: "fixed",
     kind: Box,
+    visible: true,
     minSize: size(0, 0),
     maxSize: size(0, 0),
   ))
@@ -99,6 +104,7 @@ test "hbox expand child gets remaining main-axis space":
   ui.addElement(Element(
     id: "fill",
     kind: Box,
+    visible: true,
     expand: true,
     flex: 1,
     minSize: size(0, 0),
@@ -120,6 +126,7 @@ test "uirelays cell binding maps root rects":
   ui.addElement(Element(
     id: "toolbarRoot",
     kind: VBox,
+    visible: true,
     minSize: size(0, 0),
     maxSize: size(0, 0),
   ))
@@ -127,6 +134,7 @@ test "uirelays cell binding maps root rects":
   ui.addElement(Element(
     id: "bodyRoot",
     kind: VBox,
+    visible: true,
     minSize: size(0, 0),
     maxSize: size(0, 0),
   ))
@@ -182,6 +190,7 @@ test "justify end shifts children on main axis":
   ui.addElement(Element(
     id: "root",
     kind: HBox,
+    visible: true,
     spacing: 2,
     justify: JustifyEnd,
     align: AlignStart,
@@ -191,6 +200,7 @@ test "justify end shifts children on main axis":
   ui.addElement(Element(
     id: "a",
     kind: Box,
+    visible: true,
     minSize: size(0, 0),
     maxSize: size(0, 0),
   ))
@@ -198,6 +208,7 @@ test "justify end shifts children on main axis":
   ui.addElement(Element(
     id: "b",
     kind: Box,
+    visible: true,
     minSize: size(0, 0),
     maxSize: size(0, 0),
   ))
@@ -217,6 +228,7 @@ test "align end positions child at cross-axis end":
   ui.addElement(Element(
     id: "root",
     kind: VBox,
+    visible: true,
     justify: JustifyStart,
     align: AlignEnd,
     minSize: size(0, 0),
@@ -225,6 +237,7 @@ test "align end positions child at cross-axis end":
   ui.addElement(Element(
     id: "a",
     kind: Box,
+    visible: true,
     minSize: size(0, 0),
     maxSize: size(0, 0),
   ))
@@ -237,9 +250,9 @@ test "align end positions child at cross-axis end":
 
 test "dsl hbox vbox constructors build tree and layout":
   var ui = initUi()
-  ui.layout("root"):
-    ui.vbox("root", boxOpts(spacing = 2, padding = uniformSides(1), align = AlignStretch)):
-      ui.hbox("row", boxOpts(spacing = 1, align = AlignStretch)):
+  layout("root"):
+    vbox("root", boxOpts(spacing = 2, padding = uniformSides(1), align = AlignStretch)):
+      hbox("row", boxOpts(spacing = 1, align = AlignStretch)):
         discard ui.box("a", measure = leafFixed(5, 3))
         discard ui.text("b", "hello", measure = leafFixed(7, 4), expand = true, flex = 1)
 
@@ -253,8 +266,8 @@ test "dsl hbox vbox constructors build tree and layout":
 
 test "text uses ui measure callback and falls back to pref size":
   var ui = initUi()
-  ui.layout("root"):
-    ui.vbox("root", boxOpts(spacing = 1)):
+  layout("root"):
+    vbox("root", boxOpts(spacing = 1)):
       discard ui.text("title", "Title", prefSize = size(3, 2))
       discard ui.box("avatar", prefSize = size(1, 1), measure = leafFixed(6, 4))
 
@@ -267,8 +280,8 @@ test "text uses ui measure callback and falls back to pref size":
 
 test "self center overrides cross-axis only in vbox flow":
   var ui = initUi()
-  ui.layout("root"):
-    ui.vbox("root", boxOpts(spacing = 0, align = AlignStart)):
+  layout("root"):
+    vbox("root", boxOpts(spacing = 0, align = AlignStart)):
       discard ui.text("centered", "C", prefSize = size(10, 4), alignSelf = SelfCenter, justifySelf = SelfCenter)
 
   let resultLayout = layoutInRect(ui, "root", rect(0, 0, 100, 40))
@@ -282,13 +295,14 @@ test "space evenly distributes children in hbox":
   ui.addElement(Element(
     id: "root",
     kind: HBox,
+    visible: true,
     justify: SpaceEvenly,
     align: AlignStart,
     minSize: size(0, 0),
     maxSize: size(0, 0),
   ))
-  ui.addElement(Element(id: "a", kind: Box, minSize: size(0, 0), maxSize: size(0, 0)))
-  ui.addElement(Element(id: "b", kind: Box, minSize: size(0, 0), maxSize: size(0, 0)))
+  ui.addElement(Element(id: "a", kind: Box, visible: true, minSize: size(0, 0), maxSize: size(0, 0)))
+  ui.addElement(Element(id: "b", kind: Box, visible: true, minSize: size(0, 0), maxSize: size(0, 0)))
   ui.setMeasure("a", leafFixed(10, 2))
   ui.setMeasure("b", leafFixed(10, 2))
   ui.addChild("root", "a")
@@ -302,8 +316,8 @@ test "space evenly distributes children in hbox":
 
 test "flex weights distribute remaining space":
   var ui = initUi()
-  ui.layout("root"):
-    ui.hbox("root", boxOpts(spacing = 0, align = AlignStretch)):
+  layout("root"):
+    hbox("root", boxOpts(spacing = 0, align = AlignStretch)):
       discard ui.box("a", prefSize = size(10, 4), measure = leafFixed(10, 4), expand = true, flex = 1)
       discard ui.box("b", prefSize = size(10, 4), measure = leafFixed(10, 4), expand = true, flex = 3)
 
@@ -315,8 +329,8 @@ test "flex weights distribute remaining space":
 
 test "align self end overrides parent align":
   var ui = initUi()
-  ui.layout("root"):
-    ui.vbox("root", boxOpts(align = AlignStart)):
+  layout("root"):
+    vbox("root", boxOpts(align = AlignStart)):
       discard ui.box("child", measure = leafFixed(10, 2), alignSelf = SelfEnd)
 
   let resultLayout = layoutInRect(ui, "root", rect(0, 0, 100, 20))
@@ -325,8 +339,8 @@ test "align self end overrides parent align":
 
 test "debug logging captures measure and arrange":
   var ui = initUi()
-  ui.layout("root"):
-    ui.vbox("root", boxOpts(spacing = 1)):
+  layout("root"):
+    vbox("root", boxOpts(spacing = 1)):
       discard ui.box("a", measure = leafFixed(4, 3))
 
   let resultLayout = layoutInRect(ui, "root", rect(0, 0, 20, 10), debugLog = true)
@@ -347,27 +361,59 @@ test "debug logging captures validation failure":
 
 test "button widget measures and lays out as leaf":
   var ui = initUi()
-  ui.layout("root"):
-    ui.vbox("root", boxOpts(spacing = 0)):
-      discard ui.button("ok", "OK", measure = leafFixed(12, 4))
+  layout("root"):
+    vbox("root", boxOpts(spacing = 0)):
+      discard ui.pushButton("ok", "OK", measure = leafFixed(12, 4))
 
   let resultLayout = layoutInRect(ui, "root", rect(0, 0, 100, 20))
   check resultLayout.ok
   check resultLayout.measured["ok"] == size(12, 4)
   check resultLayout.rects["ok"].w == 12
-  check ui.elements["ok"].kind == Text
+  check ui.elements["ok"].kind == HBox
   check ui.elements["ok"].interactivity == ControlElement
+
+test "buttonImage derives dimensions from source or explicit size":
+  let fromSource = buttonImage("atlas.icon.save", rect(4, 6, 18, 20))
+  check fromSource.hasSource
+  check fromSource.size == size(18, 20)
+  check fromSource.normalizedSource() == rect(4, 6, 18, 20)
+
+  let explicit = buttonImage("icon.ok", size(16, 12))
+  check not explicit.hasSource
+  check explicit.size == size(16, 12)
+  check explicit.normalizedSource() == rect(0, 0, 16, 12)
+
+test "button with leading trailing and background images builds a composite control":
+  var ui = initUi()
+  let leading = buttonImage("icon.leading", size(12, 12))
+  let trailing = buttonImage("icon.trailing", rect(0, 0, 10, 10))
+  let background = buttonImage("button.save.background", size(64, 24))
+
+  layout("root"):
+    vbox("root", boxOpts(spacing = 0)):
+      discard ui.pushButton("save", "save", leading = leading, trailing = trailing, background = background)
+
+  check ui.elements["save"].kind == HBox
+  check ui.elements["save"].interactivity == ControlElement
+  check ui.elements["save"].backgroundImage.hasButtonImage()
+  check ui.elements["save"].backgroundImage.size == size(64, 24)
+  check ui.elements["save.leading"].kind == Image
+  check ui.elements["save.label"].kind == Text
+  check ui.elements["save.trailing"].kind == Image
+  check ui.parentById["save.leading"] == "save"
+  check ui.parentById["save.label"] == "save"
+  check ui.parentById["save.trailing"] == "save"
 
 test "card helpers set expected surface styles":
   var ui = initUi()
-  ui.layout("root"):
-    ui.card("card1", BorderedPanel, boxOpts()):
-      ui.cardHeader("card1.header", boxOpts()):
+  layout("root"):
+    card("card1", BorderedPanel, boxOpts()):
+      cardHeader("card1.header", boxOpts()):
         discard ui.text("h", "Header", prefSize = size(80, 20))
-      ui.cardBody("card1.body", boxOpts()):
+      cardBody("card1.body", boxOpts()):
         discard ui.text("b", "Body", prefSize = size(80, 20))
-      ui.cardFooter("card1.footer", boxOpts()):
-        discard ui.button("ok", "OK", prefSize = size(60, 20))
+      cardFooter("card1.footer", boxOpts()):
+        discard ui.pushButton("ok", "OK", prefSize = size(60, 20))
 
   check ui.elements["card1"].surfaceStyle == SurfaceBordered
   check ui.elements["card1.header"].surfaceStyle == SurfaceFilled
@@ -376,34 +422,83 @@ test "card helpers set expected surface styles":
 
 test "card footer lays out children horizontally":
   var ui = initUi()
-  ui.layout("root"):
-    ui.card("card1", BorderedPanel, boxOpts()):
-      ui.cardFooter("footer", boxOpts(justify = SpaceBetween, align = AlignCenter)):
-        discard ui.text("left", "L", prefSize = size(20, 10))
-        discard ui.text("right", "R", prefSize = size(20, 10))
+  layout("root"):
+    vbox("root", boxOpts()):
+      card("card1", BorderedPanel, boxOpts()):
+        cardFooter("footer", boxOpts(justify = SpaceBetween, align = AlignCenter)):
+          discard ui.text("left", "L", prefSize = size(20, 10))
+          discard ui.text("right", "R", prefSize = size(20, 10))
 
   let resultLayout = layoutInRect(ui, "root", rect(0, 0, 200, 80))
   check resultLayout.ok
   check resultLayout.rects["right"].x > resultLayout.rects["left"].x
   check resultLayout.rects["right"].y == resultLayout.rects["left"].y
 
-test "floating anchor positions container below trigger":
+test "bottom floating anchors dock inside target":
   var ui = initUi()
-  ui.layout("root"):
-    ui.vbox("root", boxOpts(spacing = 0, align = AlignStart)):
+  layout("root"):
+    vbox("root", boxOpts(spacing = 0, align = AlignStart)):
+      discard ui.box("left", prefSize = size(80, 30))
+      discard ui.box("right", prefSize = size(80, 30))
+  ui.setFloating("left", anchor = AnchorBottomLeft, anchorToId = "root", offsetX = 4, offsetY = -6)
+  ui.setFloating("right", anchor = AnchorBottomRight, anchorToId = "root", offsetX = -8, offsetY = -10)
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 300, 200))
+  check resultLayout.ok
+  check resultLayout.rects["left"].x == 4
+  check resultLayout.rects["left"].y == 164
+  check resultLayout.rects["right"].x == 212
+  check resultLayout.rects["right"].y == 160
+
+test "floating top anchor positions container below trigger with offset":
+  var ui = initUi()
+  layout("root"):
+    vbox("root", boxOpts(spacing = 0, align = AlignStart)):
       discard ui.box("trigger", prefSize = size(100, 20))
       discard ui.box("menu", prefSize = size(80, 30))
-  ui.setFloating("menu", anchor = AnchorBottomLeft, anchorToId = "trigger", offsetY = 2)
+  ui.setFloating("menu", anchor = AnchorTopLeft, anchorToId = "trigger", offsetY = 22)
 
   let resultLayout = layoutInRect(ui, "root", rect(0, 0, 300, 200))
   check resultLayout.ok
   check resultLayout.rects["menu"].x == resultLayout.rects["trigger"].x
   check resultLayout.rects["menu"].y == resultLayout.rects["trigger"].y + resultLayout.rects["trigger"].h + 2
 
+test "notification stack docks bottom right with margin and stacks toasts":
+  var ui = initUi()
+  var notifications = NotificationStack()
+  notifications.width = 120
+  notifications.itemHeight = 24
+  notifications.spacing = 4
+  notifications.margin = 12
+  notifications.pushNotification("First", 3.0)
+  notifications.pushNotification("Second", 3.0)
+
+  layout("root"):
+    vbox("root", boxOpts(prefSize = size(300, 200))):
+      notificationStack(notifications, "notify")
+
+  let resultLayout = layoutInRect(ui, "root", rect(0, 0, 300, 200))
+  check resultLayout.ok
+  check ui.elements["notify"].positionMode == FloatingPosition
+  check ui.elements["notify"].anchor == AnchorBottomRight
+  check resultLayout.rects["notify"].x == 168
+  check resultLayout.rects["notify"].y == 136
+  check resultLayout.rects["notify.item.0"].y < resultLayout.rects["notify.item.1"].y
+
+test "notification stack update expires elapsed toasts":
+  var notifications = NotificationStack()
+  notifications.pushNotification("Short", 1.0)
+  notifications.pushNotification("Long", 3.0)
+
+  notifications.updateNotifications(1.5)
+
+  check notifications.notifications.len == 1
+  check notifications.notifications[0].message == "Long"
+
 test "combobox widget toggles and selects option":
   var ui = initUi()
-  ui.layout("root"):
-    ui.vbox("root", boxOpts()):
+  layout("root"):
+    vbox("root", boxOpts()):
       discard ui.comboBox("combo", @["A", "B", "C"], selectedIndex = 0, width = 120, itemHeight = 24)
 
   check "combo.menu" in ui.elements
@@ -419,19 +514,19 @@ test "combobox widget toggles and selects option":
   ui.clickedId = "combo.opt.2"
   check ui.comboBoxHandleClick("combo")
   check not ui.elements["combo.menu"].visible
-  check ui.elements["combo.trigger"].text == "C"
+  check ui.elements["combo.trigger.label"].text == "C"
   check ui.elements["combo.indicator"].text == "v"
 
 test "scroll templates register viewport and floating content":
   var ui = initUi()
-  ui.layout("root"):
-    ui.vbox("root", boxOpts()):
-      ui.scrollV("sv", viewportOpts = boxOpts(prefSize = size(120, 80)), contentOpts = boxOpts(spacing = 2)):
+  layout("root"):
+    vbox("root", boxOpts()):
+      scrollV("sv", viewportOpts = boxOpts(prefSize = size(120, 80)), contentOpts = boxOpts(spacing = 2)):
         for i in 0 .. 5:
-          discard ui.button("sv.item." & $i, "Row " & $i, prefSize = size(100, 24))
-      ui.scrollH("sh", viewportOpts = boxOpts(prefSize = size(120, 60)), contentOpts = boxOpts(spacing = 2)):
+          discard ui.pushButton("sv.item." & $i, "Row " & $i, prefSize = size(100, 24))
+      scrollH("sh", viewportOpts = boxOpts(prefSize = size(120, 60)), contentOpts = boxOpts(spacing = 2)):
         for i in 0 .. 5:
-          discard ui.button("sh.item." & $i, "Col " & $i, prefSize = size(80, 24))
+          discard ui.pushButton("sh.item." & $i, "Col " & $i, prefSize = size(80, 24))
 
   check "sv" in ui.scrollByViewport
   check "sh" in ui.scrollByViewport
@@ -448,17 +543,12 @@ test "scroll templates register viewport and floating content":
 
 test "relay container auto-binds child ids to markdown layout cells":
   var ui = initUi()
-  ui.layout("root"):
-    discard ui.addWidget(relayElement("root", "| root.header, 20px |\n| root.left, 80px | root.right, * |\n| root.footer, 16px |"))
-    discard ui.box("root.header")
-    discard ui.box("root.left")
-    discard ui.box("root.right")
-    discard ui.box("root.footer")
-
-  ui.addChild("root", "root.header")
-  ui.addChild("root", "root.left")
-  ui.addChild("root", "root.right")
-  ui.addChild("root", "root.footer")
+  layout("root"):
+    relay("root", "| header, 20px |\n| left, 80px | right, * |\n| footer, 16px |", boxOpts()):
+      discard ui.box("root.header")
+      discard ui.box("root.left")
+      discard ui.box("root.right")
+      discard ui.box("root.footer")
 
   let resultLayout = layoutInRect(ui, "root", rect(0, 0, 300, 200))
   check resultLayout.ok
@@ -475,6 +565,7 @@ test "dialog state helpers manage visibility and open stack":
   ui.addElement(vboxElement("root"))
   ui.addElement(vboxElement("dlg"))
   ui.addChild("root", "dlg")
+  ui.setVisible("dlg", false)
   check not ui.elements["dlg"].visible
   check not ui.hasOpenDialogs()
   ui.showDialog("dlg")
@@ -488,11 +579,11 @@ test "dialog state helpers manage visibility and open stack":
 
 test "modal gating blocks non-floating controls while dialog open":
   var ui = initUi()
-  ui.layout("root"):
-    ui.vbox("root", boxOpts()):
-      discard ui.button("main.btn", "Main", prefSize = size(100, 30))
-      ui.vbox("dlg", boxOpts(prefSize = size(220, 120), align = AlignStretch)):
-        discard ui.button("dlg.btn", "In Dialog", prefSize = size(120, 30))
+  layout("root"):
+    vbox("root", boxOpts()):
+      discard ui.pushButton("main.btn", "Main", prefSize = size(100, 30))
+      vbox("dlg", boxOpts(prefSize = size(220, 120), align = AlignStretch)):
+        discard ui.pushButton("dlg.btn", "In Dialog", prefSize = size(120, 30))
 
   ui.setFloating("dlg", anchor = AnchorCenter)
 

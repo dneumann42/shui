@@ -1,5 +1,5 @@
-import std/[strutils, tables]
-import ./elements
+import std/[macros, strutils, tables]
+import ./[dsl, elements]
 
 type
   BoxOpts* = object
@@ -168,30 +168,31 @@ proc addChildren*(ui: var UI; parentId: string; childIds: openArray[string]) =
   for id in childIds:
     ui.addChild(parentId, id)
 
-template layout*(ui: var UI; rootId: string; body: untyped) =
+template layout*(rootId: string; body: untyped) =
   ui.setRoot(rootId)
   body
 
 proc resolveParentId(ui: UI; parentId: string): string =
   if parentId.len > 0: parentId else: ui.currentBuildParent()
 
-proc applyPanelStyle(el: var Element; style: PanelStyle) =
+proc applyPanelStyle*(el: var Element; style: PanelStyle) =
   case style
   of FilledPanel:
     el.surfaceStyle = SurfaceFilled
   of BorderedPanel:
     el.surfaceStyle = SurfaceBordered
 
-template vbox*(ui: var UI; id: string; opts = boxOpts(); body: untyped) =
+template vbox*(parentId: string; opts = boxOpts(); body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
-    discard ui.addWidget(vboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex), parentResolved)
-    ui.pushBuildParent(id)
+    discard ui.addWidget(vboxElement(parentId, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex), parentResolved)
+    ui.pushBuildParent(parentId)
     defer:
       ui.popBuildParent()
+    template id(s: string): auto = parentId & "." & s
     body
 
-template hbox*(ui: var UI; id: string; opts = boxOpts(); body: untyped) =
+template hbox*(id: string; opts = boxOpts(); body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
     discard ui.addWidget(hboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex), parentResolved)
@@ -200,7 +201,7 @@ template hbox*(ui: var UI; id: string; opts = boxOpts(); body: untyped) =
       ui.popBuildParent()
     body
 
-template relay*(ui: var UI; id: string; schema: string; opts = boxOpts(); body: untyped) =
+template relay*(id: string; schema: string; opts = boxOpts(); body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
     discard ui.addWidget(relayElement(id, schema, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex), parentResolved)
@@ -209,7 +210,7 @@ template relay*(ui: var UI; id: string; schema: string; opts = boxOpts(); body: 
       ui.popBuildParent()
     body
 
-template panel*(ui: var UI; id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
+template panel*(id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
     var el = vboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex)
@@ -220,7 +221,7 @@ template panel*(ui: var UI; id: string; style: PanelStyle; opts: BoxOpts; body: 
       ui.popBuildParent()
     body
 
-template panelRow*(ui: var UI; id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
+template panelRow*(id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
     var el = hboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex)
@@ -231,40 +232,40 @@ template panelRow*(ui: var UI; id: string; style: PanelStyle; opts: BoxOpts; bod
       ui.popBuildParent()
     body
 
-template panel*(ui: var UI; id: string; style: PanelStyle; body: untyped) =
-  ui.panel(id, style, boxOpts()):
+template panel*(id: string; style: PanelStyle; body: untyped) =
+  panel(id, style, boxOpts()):
     body
 
-template card*(ui: var UI; id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
-  ui.panel(id, style, opts):
+template card*(id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
+  panel(id, style, opts):
     body
 
-template card*(ui: var UI; id: string; style: PanelStyle; body: untyped) =
-  ui.card(id, style, boxOpts(spacing = 8, padding = uniformSides(12), align = AlignStretch)):
+template card*(id: string; style: PanelStyle; body: untyped) =
+  card(id, style, boxOpts(spacing = 8, padding = uniformSides(12), align = AlignStretch)):
     body
 
-template cardHeader*(ui: var UI; id: string; opts: BoxOpts; body: untyped) =
-  ui.panel(id, FilledPanel, opts):
+template cardHeader*(id: string; opts: BoxOpts; body: untyped) =
+  panel(id, FilledPanel, opts):
     body
 
-template cardHeader*(ui: var UI; id: string; body: untyped) =
-  ui.cardHeader(id, boxOpts(spacing = 4, padding = uniformSides(6), align = AlignStretch)):
+template cardHeader*(id: string; body: untyped) =
+  cardHeader(id, boxOpts(spacing = 4, padding = uniformSides(6), align = AlignStretch)):
     body
 
-template cardBody*(ui: var UI; id: string; opts: BoxOpts; body: untyped) =
-  ui.vbox(id, opts):
+template cardBody*(id: string; opts: BoxOpts; body: untyped) =
+  vbox(id, opts):
     body
 
-template cardBody*(ui: var UI; id: string; body: untyped) =
-  ui.cardBody(id, boxOpts(spacing = 8, padding = uniformSides(6), align = AlignStretch, expand = true, flex = 1)):
+template cardBody*(id: string; body: untyped) =
+  cardBody(id, boxOpts(spacing = 8, padding = uniformSides(6), align = AlignStretch, expand = true, flex = 1)):
     body
 
-template cardFooter*(ui: var UI; id: string; opts: BoxOpts; body: untyped) =
-  ui.panelRow(id, FilledPanel, opts):
+template cardFooter*(id: string; opts: BoxOpts; body: untyped) =
+  panelRow(id, FilledPanel, opts):
     body
 
-template cardFooter*(ui: var UI; id: string; body: untyped) =
-  ui.cardFooter(id, boxOpts(spacing = 8, padding = uniformSides(6), align = AlignCenter, justify = SpaceBetween)):
+template cardFooter*(id: string; body: untyped) =
+  cardFooter(id, boxOpts(spacing = 8, padding = uniformSides(6), align = AlignCenter, justify = SpaceBetween)):
     body
 
 proc box*(ui: var UI; id: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): string =
@@ -282,13 +283,229 @@ proc text*(ui: var UI; id: string; value: string; parentId = ""; measure: Intrin
     ui.setMeasure(widgetId, measure)
   widgetId
 
-proc button*(ui: var UI; id: string; label: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): string =
-  var el = textElement(id, label, margin, minSize, prefSize, maxSize, expand, flex, alignSelf, justifySelf)
-  el.interactivity = ControlElement
+proc image*(ui: var UI; id: string; spec: ButtonImageSpec; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): string {.discardable.} =
+  let intrinsic = buttonImageSize(spec)
+  let resolvedPrefSize =
+    if prefSize.w > 0 or prefSize.h > 0:
+      prefSize
+    else:
+      intrinsic
+
+  var el = Element(
+    id: id,
+    kind: Image,
+    interactivity: StaticElement,
+    surfaceStyle: SurfaceAuto,
+    visible: true,
+    positionMode: FlowPosition,
+    anchor: AnchorTopLeft,
+    anchorToId: "",
+    offsetX: 0,
+    offsetY: 0,
+    imageSpec: spec,
+    margin: margin,
+    minSize: minSize,
+    prefSize: resolvedPrefSize,
+    maxSize: maxSize,
+    expand: expand,
+    flex: flex,
+    alignSelf: alignSelf,
+    justifySelf: justifySelf,
+  )
   let widgetId = ui.addWidget(el, resolveParentId(ui, parentId))
   if measure != nil:
     ui.setMeasure(widgetId, measure)
   widgetId
+
+proc pushButton*(
+  ui: var UI;
+  id: string;
+  label: string;
+  parentId = "";
+  measure: IntrinsicMeasureProc = nil;
+  margin = zeroSides();
+  minSize = size(0, 0);
+  prefSize = size(0, 0);
+  maxSize = size(0, 0);
+  expand = false;
+  flex = 0;
+  alignSelf = SelfAuto;
+  justifySelf = SelfAuto;
+  visible = true;
+  positionMode = FlowPosition;
+  surfaceStyle = SurfaceAuto;
+  anchor = AnchorTopLeft;
+  anchorToId = "";
+  offsetX = 0;
+  offsetY = 0;
+  interactivity = ControlElement;
+  justify = JustifyStart;
+  align = AlignCenter;
+  spacing = 6;
+  padding = zeroSides();
+  relayLayout = "";
+  leading: ButtonImageSpec = ButtonImageSpec();
+  trailing: ButtonImageSpec = ButtonImageSpec();
+  background: ButtonImageSpec = ButtonImageSpec()
+): string {.discardable.} =
+  let parentResolved = resolveParentId(ui, parentId)
+  let resolvedPrefSize =
+    if prefSize.w > 0 or prefSize.h > 0:
+      prefSize
+    elif background.hasButtonImage():
+      buttonImageSize(background)
+    else:
+      prefSize
+
+  var el = hboxElement(id, justify, align, spacing, padding, margin, minSize, resolvedPrefSize, maxSize, expand, flex)
+  el.interactivity = interactivity
+  el.surfaceStyle = surfaceStyle
+  el.visible = visible
+  el.positionMode = positionMode
+  el.anchor = anchor
+  el.anchorToId = anchorToId
+  el.offsetX = offsetX
+  el.offsetY = offsetY
+  el.alignSelf = alignSelf
+  el.justifySelf = justifySelf
+  el.backgroundImage = background
+  el.relayLayout = relayLayout
+  let widgetId = ui.addWidget(el, parentResolved)
+
+  if leading.hasButtonImage():
+    discard ui.image(id & ".leading", leading, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
+  if label.len > 0:
+    discard ui.text(id & ".label", label, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
+  if trailing.hasButtonImage():
+    discard ui.image(id & ".trailing", trailing, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
+
+  if measure != nil:
+    ui.setMeasure(widgetId, measure)
+  widgetId
+
+macro button*(label, blk: untyped): untyped =
+  let buttonIdSym = genSym(nskLet, "buttonId")
+  let buttonElSym = genSym(nskVar, "buttonEl")
+  let buttonTextSym = genSym(nskVar, "buttonText")
+  let buttonParentSym = genSym(nskVar, "buttonParentId")
+  let buttonMeasureSym = genSym(nskVar, "buttonMeasure")
+  let buttonBody = if blk.kind == nnkStmtList: blk else: newStmtList(blk)
+  var setup = newStmtList()
+  var body = newStmtList()
+
+  for stmt in buttonBody:
+    if stmt.kind in {nnkAsgn, nnkExprEqExpr} and stmt[0].kind in {nnkIdent, nnkSym}:
+      let lhs = stmt[0].strVal
+      if lhs == "text" or lhs == "label":
+        setup.add newTree(nnkAsgn, buttonTextSym, stmt[1])
+      elif lhs == "parentId":
+        setup.add newTree(nnkAsgn, buttonParentSym, stmt[1])
+      elif lhs == "measure":
+        setup.add newTree(nnkAsgn, buttonMeasureSym, stmt[1])
+      else:
+        let fieldIdent = ident(lhs)
+        setup.add newTree(nnkAsgn, newDotExpr(buttonElSym, fieldIdent), stmt[1])
+    else:
+      body.add stmt
+
+  result = quote do:
+    block:
+      let `buttonIdSym` = $`label`
+      var `buttonTextSym` = `buttonIdSym`
+      var `buttonParentSym` = ""
+      var `buttonMeasureSym`: IntrinsicMeasureProc = nil
+      var `buttonElSym` = hboxElement(
+        `buttonIdSym`,
+        JustifyStart,
+        AlignCenter,
+        6,
+        zeroSides(),
+        zeroSides(),
+        size(0, 0),
+        size(0, 0),
+        size(0, 0),
+        false,
+        0
+      )
+      `buttonElSym`.interactivity = ControlElement
+      `setup`
+      if `buttonElSym`.prefSize.w == 0 and `buttonElSym`.prefSize.h == 0 and `buttonElSym`.backgroundImage.hasButtonImage():
+        `buttonElSym`.prefSize = buttonImageSize(`buttonElSym`.backgroundImage)
+      discard ui.addWidget(`buttonElSym`, resolveParentId(ui, `buttonParentSym`))
+      if `buttonTextSym`.len > 0:
+        discard ui.text(`buttonIdSym` & ".label", `buttonTextSym`, parentId = `buttonIdSym`, alignSelf = SelfCenter, justifySelf = SelfCenter)
+      if `buttonMeasureSym` != nil:
+        ui.setMeasure(`buttonIdSym`, `buttonMeasureSym`)
+      let pressed {.inject.} = ui.clicked `buttonIdSym`
+      `body`
+
+type
+  NotificationToast* = object
+    id*: int
+    message*: string
+    remainingSeconds*: float
+
+proc notificationWidth*(width: int): int =
+  if width > 0: width else: 320
+
+proc notificationItemHeight*(height: int): int =
+  if height > 0: height else: 40
+
+proc notificationSpacing*(spacing: int): int =
+  if spacing > 0: spacing else: 8
+
+proc notificationMargin*(margin: int): int =
+  if margin > 0: margin else: 16
+
+proc notificationDuration*(durationSeconds: float): float =
+  if durationSeconds > 0: durationSeconds else: 3.0
+
+widget NotificationStack:
+  state:
+    notifications: seq[NotificationToast] = @[]
+    nextId: int = 0
+    width: int = 320
+    itemHeight: int = 40
+    spacing: int = 8
+    margin: int = 16
+
+  render(rootId: string):
+    if state.notifications.len > 0:
+      let stackWidth = notificationWidth(state.width)
+      let toastHeight = notificationItemHeight(state.itemHeight)
+      let stackSpacing = notificationSpacing(state.spacing)
+      let stackMargin = notificationMargin(state.margin)
+
+      vbox(rootId, boxOpts(align = AlignStretch, spacing = stackSpacing, prefSize = size(stackWidth, 0))):
+        for item in state.notifications:
+          let itemId = rootId & ".item." & $item.id
+          panel(itemId, FilledPanel, boxOpts(align = AlignStretch, padding = uniformSides(8), prefSize = size(stackWidth, toastHeight))):
+            discard ui.text(itemId & ".message", item.message, prefSize = size(max(0, stackWidth - 16), max(0, toastHeight - 16)), alignSelf = SelfStretch)
+
+      ui.setFloating(rootId, anchor = AnchorBottomRight, anchorToId = "", offsetX = -stackMargin, offsetY = -stackMargin)
+
+template notificationStack*(state: var NotificationStack) =
+  notificationStack(state, "notifications")
+
+proc pushNotification*(state: var NotificationStack; message: string; durationSeconds = 3.0) =
+  state.notifications.add NotificationToast(
+    id: state.nextId,
+    message: message,
+    remainingSeconds: notificationDuration(durationSeconds),
+  )
+  inc state.nextId
+
+proc updateNotifications*(state: var NotificationStack; deltaSeconds: float) =
+  if state.notifications.len == 0:
+    return
+
+  var kept: seq[NotificationToast] = @[]
+  for item in state.notifications:
+    var next = item
+    next.remainingSeconds -= deltaSeconds
+    if next.remainingSeconds > 0:
+      kept.add next
+  state.notifications = kept
 
 proc attachAdornment*(ui: var UI; hostId, adornId, text: string; prefSize = size(18, 18); anchor = AnchorTopRight; offsetX = -2; offsetY = 0): string =
   let parentId = ui.parentById.getOrDefault(hostId, "")
@@ -313,24 +530,24 @@ proc comboBox*(ui: var UI; id: string; items: openArray[string]; selectedIndex =
 
   discard ui.addWidget(vboxElement(id, JustifyStart, AlignStretch, 0, zeroSides(), zeroSides(), size(0, 0), size(width, itemHeight), size(0, 0), false, 0), resolveParentId(ui, ""))
   let triggerId = id & ".trigger"
-  discard ui.button(triggerId, selectedLabel, parentId = id, prefSize = size(width, itemHeight))
+  discard ui.pushButton(triggerId, selectedLabel, parentId = id, prefSize = size(width, itemHeight))
   if triggerId in ui.elements:
     var trigger = ui.elements[triggerId]
     trigger.surfaceStyle = SurfaceBordered
     ui.elements[triggerId] = trigger
   let indicatorId = id & ".indicator"
-  discard ui.attachAdornment(triggerId, indicatorId, "<>", prefSize = size(20, itemHeight), anchor = AnchorTopRight, offsetX = -4, offsetY = 0)
+  discard ui.attachAdornment(triggerId, indicatorId, "v", prefSize = size(20, itemHeight), anchor = AnchorTopRight, offsetX = -4, offsetY = 0)
 
   let menuId = id & ".menu"
   var menu = vboxElement(menuId, JustifyStart, AlignStretch, 2, uniformSides(4), zeroSides(), size(0, 0), size(width, max(0, items.len * itemHeight + 8)), size(0, 0), false, 0)
   menu.surfaceStyle = SurfaceBordered
   discard ui.addWidget(menu, id)
-  ui.setFloating(menuId, anchor = AnchorBottomLeft, anchorToId = triggerId, offsetX = 0, offsetY = 2)
+  ui.setFloating(menuId, anchor = AnchorTopLeft, anchorToId = triggerId, offsetX = 0, offsetY = itemHeight + 2)
   ui.setVisible(menuId, false)
 
   for i, item in items:
     let optId = id & ".opt." & $i
-    discard ui.button(optId, item, parentId = menuId, prefSize = size(width - 8, itemHeight))
+    discard ui.pushButton(optId, item, parentId = menuId, prefSize = size(width - 8, itemHeight))
 
   id
 
@@ -343,13 +560,30 @@ proc comboBoxMenuId*(id: string): string =
 proc comboBoxOptionId*(id: string; index: int): string =
   id & ".opt." & $index
 
+proc buttonLabelId(id: string): string =
+  id & ".label"
+
+proc elementText(ui: UI; id: string): string =
+  if id in ui.elements and ui.elements[id].kind == Text:
+    ui.elements[id].text
+  else:
+    ""
+
+proc setElementText(ui: var UI; id, value: string): bool =
+  if id notin ui.elements or ui.elements[id].kind != Text:
+    return false
+  var el = ui.elements[id]
+  el.text = value
+  ui.elements[id] = el
+  true
+
 proc comboBoxToggle*(ui: var UI; id: string): bool =
   let menuId = comboBoxMenuId(id)
   if menuId notin ui.elements:
     return false
   let openNow = ui.elements[menuId].visible
   ui.setVisible(menuId, not openNow)
-  ui.setAdornmentText(id & ".indicator", if openNow: "<>" else: "><")
+  ui.setAdornmentText(id & ".indicator", if openNow: "v" else: "^")
   true
 
 proc comboBoxSelect*(ui: var UI; id: string; index: int): bool =
@@ -358,14 +592,13 @@ proc comboBoxSelect*(ui: var UI; id: string; index: int): bool =
   let menuId = comboBoxMenuId(id)
   if triggerId notin ui.elements or optionId notin ui.elements:
     return false
-  if ui.elements[triggerId].kind != Text or ui.elements[optionId].kind != Text:
+  let selectedLabel = ui.elementText(buttonLabelId(optionId))
+  if selectedLabel.len == 0:
     return false
-  var trigger = ui.elements[triggerId]
-  trigger.text = ui.elements[optionId].text
-  ui.elements[triggerId] = trigger
+  discard ui.setElementText(buttonLabelId(triggerId), selectedLabel)
   if menuId in ui.elements:
     ui.setVisible(menuId, false)
-  ui.setAdornmentText(id & ".indicator", "><")
+  ui.setAdornmentText(id & ".indicator", "v")
   true
 
 proc comboBoxHandleClick*(ui: var UI; id: string): bool =
@@ -376,25 +609,24 @@ proc comboBoxHandleClick*(ui: var UI; id: string): bool =
   if ui.clickedId == triggerId:
     let openNow = ui.elements[menuId].visible
     ui.setVisible(menuId, not openNow)
+    ui.setAdornmentText(id & ".indicator", if openNow: "v" else: "^")
     return true
 
   let optionPrefix = id & ".opt."
   if ui.clickedId.startsWith(optionPrefix):
     let selectedId = ui.clickedId
     if selectedId in ui.elements and triggerId in ui.elements:
-      let selectedLabel = ui.elements[selectedId].text
-      var trigger = ui.elements[triggerId]
-      if trigger.kind == Text:
-        trigger.text = selectedLabel
-        ui.elements[triggerId] = trigger
+      let selectedLabel = ui.elementText(buttonLabelId(selectedId))
+      discard ui.setElementText(buttonLabelId(triggerId), selectedLabel)
     ui.setVisible(menuId, false)
+    ui.setAdornmentText(id & ".indicator", "v")
     return true
   false
 
 proc scrollContentId*(id: string): string =
   id & ".content"
 
-template scrollV*(ui: var UI; id: string; viewportOpts = boxOpts(); contentOpts = boxOpts(spacing = 4, align = AlignStretch); body: untyped) =
+template scrollV*(id: string; viewportOpts = boxOpts(); contentOpts = boxOpts(spacing = 4, align = AlignStretch); body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
     var viewport = vboxElement(id, viewportOpts.justify, viewportOpts.align, viewportOpts.spacing, viewportOpts.padding, viewportOpts.margin, viewportOpts.minSize, viewportOpts.prefSize, viewportOpts.maxSize, viewportOpts.expand, viewportOpts.flex)
@@ -409,7 +641,7 @@ template scrollV*(ui: var UI; id: string; viewportOpts = boxOpts(); contentOpts 
       ui.popBuildParent()
     body
 
-template scrollH*(ui: var UI; id: string; viewportOpts = boxOpts(); contentOpts = boxOpts(spacing = 4, align = AlignStretch); body: untyped) =
+template scrollH*(id: string; viewportOpts = boxOpts(); contentOpts = boxOpts(spacing = 4, align = AlignStretch); body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
     var viewport = hboxElement(id, viewportOpts.justify, viewportOpts.align, viewportOpts.spacing, viewportOpts.padding, viewportOpts.margin, viewportOpts.minSize, viewportOpts.prefSize, viewportOpts.maxSize, viewportOpts.expand, viewportOpts.flex)
@@ -433,31 +665,31 @@ proc showDialog*(ui: var UI; id: string) =
 proc hideDialog*(ui: var UI; id: string) =
   ui.closeDialog(id)
 
-template dialogHeader*(ui: var UI; id: string; opts = boxOpts(justify = SpaceBetween, align = AlignCenter, spacing = 8, padding = uniformSides(8)); body: untyped) =
-  ui.panelRow(id, FilledPanel, opts):
+template dialogHeader*(id: string; opts = boxOpts(justify = SpaceBetween, align = AlignCenter, spacing = 8, padding = uniformSides(8)); body: untyped) =
+  panelRow(id, FilledPanel, opts):
     body
 
-template dialogHeader*(ui: var UI; id: string; body: untyped) =
-  ui.dialogHeader(id, boxOpts(justify = SpaceBetween, align = AlignStretch, spacing = 8, padding = uniformSides(8))):
+template dialogHeader*(id: string; body: untyped) =
+  dialogHeader(id, boxOpts(justify = SpaceBetween, align = AlignStretch, spacing = 8, padding = uniformSides(8))):
     body
 
-template dialogBody*(ui: var UI; id: string; opts = boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch, expand = true, flex = 1); body: untyped) =
-  ui.vbox(id, opts):
+template dialogBody*(id: string; opts = boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch, expand = true, flex = 1); body: untyped) =
+  vbox(id, opts):
     body
 
-template dialogBody*(ui: var UI; id: string; body: untyped) =
-  ui.dialogBody(id, boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch, expand = true, flex = 1)):
+template dialogBody*(id: string; body: untyped) =
+  dialogBody(id, boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch, expand = true, flex = 1)):
     body
 
-template dialogFooter*(ui: var UI; id: string; opts = boxOpts(justify = SpaceBetween, align = AlignCenter, spacing = 8, padding = uniformSides(8)); body: untyped) =
-  ui.panelRow(id, FilledPanel, opts):
+template dialogFooter*(id: string; opts = boxOpts(justify = SpaceBetween, align = AlignCenter, spacing = 8, padding = uniformSides(8)); body: untyped) =
+  panelRow(id, FilledPanel, opts):
     body
 
-template dialogFooter*(ui: var UI; id: string; body: untyped) =
-  ui.dialogFooter(id, boxOpts(justify = SpaceBetween, align = AlignCenter, spacing = 8, padding = uniformSides(8))):
+template dialogFooter*(id: string; body: untyped) =
+  dialogFooter(id, boxOpts(justify = SpaceBetween, align = AlignCenter, spacing = 8, padding = uniformSides(8))):
     body
 
-template dialog*(ui: var UI; id: string; title = ""; showHeader = true; showClose = true; opts = boxOpts(spacing = 8, padding = uniformSides(8), align = AlignStretch, prefSize = size(520, 320)); body: untyped) =
+template dialog*(id: string; title = ""; showHeader = true; showClose = true; opts = boxOpts(spacing = 8, padding = uniformSides(8), align = AlignStretch, prefSize = size(520, 320)); body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
     var root = vboxElement(id, opts.justify, AlignStretch, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex)
@@ -469,12 +701,12 @@ template dialog*(ui: var UI; id: string; title = ""; showHeader = true; showClos
     defer:
       ui.popBuildParent()
     if showHeader:
-      ui.dialogHeader(id & ".header", boxOpts(justify = SpaceBetween, spacing = 4, padding = uniformSides(8), align = AlignStretch)):
+      dialogHeader(id & ".header", boxOpts(justify = SpaceBetween, spacing = 4, padding = uniformSides(8), align = AlignStretch)):
         if title.len > 0:
           discard ui.text(id & ".title", title, prefSize = size(260, 28), alignSelf = SelfStart)
         else:
           discard ui.box(id & ".title.spacer", prefSize = size(10, 28), expand = true, flex = 1)
         if showClose:
-          discard ui.button(dialogCloseId(id), "X", prefSize = size(84, 28))
-    ui.dialogBody(id & ".body"):
+          discard ui.pushButton(dialogCloseId(id), "X", prefSize = size(84, 28))
+    dialogBody(id & ".body"):
       body

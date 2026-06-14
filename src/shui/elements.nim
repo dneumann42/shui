@@ -58,10 +58,17 @@ type
 
   ElementKind* = enum
     Box
+    Image
     Text
     VBox
     HBox
     RelayContainer
+
+  ButtonImageSpec* = object
+    resourceId*: string
+    source*: Rect
+    hasSource*: bool
+    size*: Size
 
   Sides* = object
     top*: int
@@ -93,9 +100,12 @@ type
     flex*: int
     alignSelf*: SelfAlign
     justifySelf*: SelfAlign
+    backgroundImage*: ButtonImageSpec
     case kind*: ElementKind
     of Box:
       discard
+    of Image:
+      imageSpec*: ButtonImageSpec
     of Text:
       text*: string
     of VBox, HBox, RelayContainer:
@@ -117,6 +127,43 @@ type
     regionBindings*: Table[string, string]
     scrollByViewport*: Table[string, ScrollState]
     openDialogs*: seq[string]
+
+  Stringable = concept
+    proc `$`(s: Self): string
+
+proc clicked*(ui: UI, id: Stringable): bool =
+  ui.clickedId == $id
+
+proc buttonImage*(resourceId: string; size: Size): ButtonImageSpec =
+  ButtonImageSpec(
+    resourceId: resourceId,
+    size: size,
+    hasSource: false,
+    source: rect(0, 0, size.w, size.h),
+  )
+
+proc buttonImage*(resourceId: string; source: Rect): ButtonImageSpec =
+  ButtonImageSpec(
+    resourceId: resourceId,
+    size: Size(w: source.w, h: source.h),
+    hasSource: true,
+    source: source,
+  )
+
+proc normalizedSource*(spec: ButtonImageSpec): Rect =
+  if spec.hasSource:
+    spec.source
+  else:
+    rect(0, 0, spec.size.w, spec.size.h)
+
+proc buttonImageSize*(spec: ButtonImageSpec): Size =
+  if spec.hasSource:
+    Size(w: spec.source.w, h: spec.source.h)
+  else:
+    spec.size
+
+proc hasButtonImage*(spec: ButtonImageSpec): bool =
+  spec.resourceId.len > 0
 
 proc zeroSides*(): Sides =
   Sides(top: 0, right: 0, bottom: 0, left: 0)
@@ -265,7 +312,7 @@ proc axisForKind*(kind: ElementKind): Axis =
   case kind
   of HBox: Horizontal
   of VBox, RelayContainer: Vertical
-  of Box, Text: Vertical
+  of Box, Image, Text: Vertical
 
 proc mainSize*(axis: Axis; s: Size): int =
   if axis == Horizontal: s.w else: s.h

@@ -13,3 +13,4 @@ tests/test1
 tests/t*
 example/counter
 example/*.exe
+build

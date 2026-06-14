@@ -81,12 +81,19 @@ proc measureNode(ui: UI; id: string; measured: var Table[string, Size];
     logs.logLine(logEnabled, fmt"measure hidden id={id} size=0x0")
     return measured[id]
 
+  let explicitMeasure = ui.measureById.getOrDefault(id, nil)
+  if explicitMeasure != nil:
+    if el.kind notin {Box, Text, Image}:
+      for childId in ui.childrenById.getOrDefault(id, @[]):
+        discard measureNode(ui, childId, measured, logs, logEnabled)
+    let s = clampSize(explicitMeasure(el.maxSize.w, el.maxSize.h), el.minSize, el.maxSize)
+    measured[id] = s
+    logs.logLine(logEnabled, fmt"measure explicit id={id} kind={el.kind} size={s.w}x{s.h}")
+    return s
+
   case el.kind
-  of Box, Text:
+  of Box, Text, Image:
     var s = el.prefSize
-    let measure = ui.measureById.getOrDefault(id, nil)
-    if measure != nil:
-      s = measure(el.maxSize.w, el.maxSize.h)
     s = clampSize(s, el.minSize, el.maxSize)
     measured[id] = s
     logs.logLine(logEnabled, fmt"measure leaf id={id} kind={el.kind} size={s.w}x{s.h}")
@@ -213,10 +220,10 @@ proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
           y = target.y
         of AnchorBottomLeft:
           x = target.x
-          y = target.y + target.h
+          y = target.y + target.h - childSize.h
         of AnchorBottomRight:
           x = target.x + target.w - childSize.w
-          y = target.y + target.h
+          y = target.y + target.h - childSize.h
         of AnchorCenter:
           x = target.x + (target.w - childSize.w) div 2
           y = target.y + (target.h - childSize.h) div 2
@@ -362,10 +369,10 @@ proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
       y = target.y
     of AnchorBottomLeft:
       x = target.x
-      y = target.y + target.h
+      y = target.y + target.h - childSize.h
     of AnchorBottomRight:
       x = target.x + target.w - childSize.w
-      y = target.y + target.h
+      y = target.y + target.h - childSize.h
     of AnchorCenter:
       x = target.x + (target.w - childSize.w) div 2
       y = target.y + (target.h - childSize.h) div 2

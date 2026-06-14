@@ -6,6 +6,11 @@ when not defined(shuiHostedOnly):
 import ./[elements, layout_engine]
 
 type
+  ButtonImageDrawProc* = proc(spec: ButtonImageSpec; dst: Rect): bool {.nimcall.}
+
+var buttonImageDrawHook*: pointer
+
+type
   ScrollDragAxis = enum
     DragNone
     DragX
@@ -128,6 +133,12 @@ proc drawSurface(r: Rect; style: SurfaceStyle; baseColor: Color; cfg: RuntimeCon
     fillRect(r, cfg.panelInnerColor)
     drawBorder(r, cfg.panelBorderColor)
 
+proc drawButtonImage(spec: ButtonImageSpec; dst: Rect): bool =
+  if buttonImageDrawHook.isNil:
+    return false
+  let draw = cast[ButtonImageDrawProc](buttonImageDrawHook)
+  draw(spec, dst)
+
 proc drawNode(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font) =
   if id notin rects:
     return
@@ -135,9 +146,27 @@ proc drawNode(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
   let el = ui.elements[id]
   case el.kind
   of VBox, HBox, RelayContainer:
-    drawSurface(r, el.surfaceStyle, cfg.containerColor, cfg)
+    if el.interactivity == ControlElement:
+      if el.backgroundImage.hasButtonImage():
+        if drawButtonImage(el.backgroundImage, r):
+          let overlay =
+            if ui.hoveredId == id:
+              color(cfg.buttonHoverColor.r, cfg.buttonHoverColor.g, cfg.buttonHoverColor.b, 96'u8)
+            else:
+              color(cfg.buttonColor.r, cfg.buttonColor.g, cfg.buttonColor.b, 64'u8)
+          fillRect(r, overlay)
+        else:
+          let bg = if ui.hoveredId == id: cfg.buttonHoverColor else: cfg.buttonColor
+          drawSurface(r, el.surfaceStyle, bg, cfg)
+      else:
+        let bg = if ui.hoveredId == id: cfg.buttonHoverColor else: cfg.buttonColor
+        drawSurface(r, el.surfaceStyle, bg, cfg)
+    else:
+      drawSurface(r, el.surfaceStyle, cfg.containerColor, cfg)
   of Box:
     drawSurface(r, el.surfaceStyle, cfg.boxColor, cfg)
+  of Image:
+    discard drawButtonImage(el.imageSpec, r)
   of Text:
     let isControl = el.interactivity == ControlElement
     var textBg = color(0, 0, 0, 0)
