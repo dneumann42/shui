@@ -29,6 +29,8 @@ type
     boxColor*: Color
     buttonColor*: Color
     buttonHoverColor*: Color
+    buttonPressedColor*: Color
+    buttonBorderColor*: Color
     panelFillColor*: Color
     panelInnerColor*: Color
     panelBorderColor*: Color
@@ -62,6 +64,8 @@ proc defaultRuntimeConfig*(): RuntimeConfig =
     boxColor: color(72, 72, 72),
     buttonColor: color(70, 90, 120),
     buttonHoverColor: color(98, 126, 166),
+    buttonPressedColor: color(130, 158, 198),
+    buttonBorderColor: color(90, 115, 150),
     panelFillColor: color(58, 58, 74),
     panelInnerColor: color(34, 34, 44),
     panelBorderColor: color(110, 124, 150),
@@ -147,20 +151,20 @@ proc drawNode(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
   case el.kind
   of VBox, HBox, RelayContainer:
     if el.interactivity == ControlElement:
+      let bg =
+        if ui.clickedId == id: cfg.buttonPressedColor
+        elif ui.hoveredId == id: cfg.buttonHoverColor
+        else: cfg.buttonColor
       if el.backgroundImage.hasButtonImage():
         if drawButtonImage(el.backgroundImage, r):
-          let overlay =
-            if ui.hoveredId == id:
-              color(cfg.buttonHoverColor.r, cfg.buttonHoverColor.g, cfg.buttonHoverColor.b, 96'u8)
-            else:
-              color(cfg.buttonColor.r, cfg.buttonColor.g, cfg.buttonColor.b, 64'u8)
-          fillRect(r, overlay)
+          fillRect(r, color(bg.r, bg.g, bg.b, 96'u8))
+          drawBorder(r, cfg.buttonBorderColor)
         else:
-          let bg = if ui.hoveredId == id: cfg.buttonHoverColor else: cfg.buttonColor
           drawSurface(r, el.surfaceStyle, bg, cfg)
+          drawBorder(r, cfg.buttonBorderColor)
       else:
-        let bg = if ui.hoveredId == id: cfg.buttonHoverColor else: cfg.buttonColor
         drawSurface(r, el.surfaceStyle, bg, cfg)
+        drawBorder(r, cfg.buttonBorderColor)
     else:
       drawSurface(r, el.surfaceStyle, cfg.containerColor, cfg)
   of Box:
@@ -171,8 +175,12 @@ proc drawNode(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
     let isControl = el.interactivity == ControlElement
     var textBg = color(0, 0, 0, 0)
     if isControl:
-      let bg = if ui.hoveredId == id: cfg.buttonHoverColor else: cfg.buttonColor
+      let bg =
+        if ui.clickedId == id: cfg.buttonPressedColor
+        elif ui.hoveredId == id: cfg.buttonHoverColor
+        else: cfg.buttonColor
       drawSurface(r, el.surfaceStyle, bg, cfg)
+      drawBorder(r, cfg.buttonBorderColor)
       textBg =
         case el.surfaceStyle
         of SurfaceAuto: bg
@@ -360,14 +368,15 @@ proc layoutFrame*(
   rootId: string;
   width, height: int;
   cfg = defaultRuntimeConfig()
-): LayoutOutcome =
-  result =
-    if cfg.relayLayoutSrc.len > 0:
-      layoutWithUirelays(ui, cfg.relayLayoutSrc, width, height, cfg.lineHeight, cfg.padding, cfg.gap)
-    else:
-      layoutInRect(ui, rootId, rect(0, 0, width, height))
-  if result.ok:
-    ui.syncScrollOffsets(result.rects)
+): LayoutOutcome {.gcsafe.} =
+  {.cast(gcsafe).}: # TODO(gcsafe): make this whole module gcsafe
+    result =
+      if cfg.relayLayoutSrc.len > 0:
+        layoutWithUirelays(ui, cfg.relayLayoutSrc, width, height, cfg.lineHeight, cfg.padding, cfg.gap)
+      else:
+        layoutInRect(ui, rootId, rect(0, 0, width, height))
+    if result.ok:
+      ui.syncScrollOffsets(result.rects)
 
 proc updateHovered*(
   ui: var UI;
