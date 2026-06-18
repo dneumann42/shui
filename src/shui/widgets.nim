@@ -282,7 +282,7 @@ template cardFooter*(id: string; body: untyped) =
   cardFooter(id, boxOpts(spacing = 8, padding = uniformSides(6), align = AlignCenter, justify = SpaceBetween)):
     body
 
-proc box*(ui: var UI; id: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): string =
+proc boxNode*(ui: var UI; id: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): string {.discardable.} =
   var el = boxElement(id, margin, minSize, prefSize, maxSize, expand, flex)
   el.alignSelf = alignSelf
   el.justifySelf = justifySelf
@@ -291,13 +291,13 @@ proc box*(ui: var UI; id: string; parentId = ""; measure: IntrinsicMeasureProc =
     ui.setMeasure(widgetId, measure)
   widgetId
 
-proc text*(ui: var UI; id: string; value: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto; textAlign = TextCenter): string =
+proc textLabel*(ui: var UI; id: string; value: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto; textAlign = TextCenter): string {.discardable.} =
   let widgetId = ui.addWidget(textElement(id, value, margin, minSize, prefSize, maxSize, expand, flex, alignSelf, justifySelf, textAlign), resolveParentId(ui, parentId))
   if measure != nil:
     ui.setMeasure(widgetId, measure)
   widgetId
 
-proc image*(ui: var UI; id: string; spec: ButtonImageSpec; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): string {.discardable.} =
+proc imageNode*(ui: var UI; id: string; spec: ButtonImageSpec; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): string {.discardable.} =
   let intrinsic = buttonImageSize(spec)
   let resolvedPrefSize =
     if prefSize.w > 0 or prefSize.h > 0:
@@ -393,7 +393,7 @@ proc pushButton*(
   let widgetId = ui.addWidget(el, parentResolved)
 
   if leading.hasButtonImage():
-    discard ui.image(id & ".leading", leading, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
+    discard ui.imageNode(id & ".leading", leading, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
   if startAdorn != nil:
     startAdorn(ui, id)
   if label.len > 0:
@@ -401,12 +401,12 @@ proc pushButton*(
       of LabelLeft: TextLeft
       of LabelRight: TextRight
       of LabelCenter: TextCenter
-    discard ui.text(id & ".label", label, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter,
+    discard ui.textLabel(id & ".label", label, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter,
       expand = true, flex = 1, textAlign = ta)
   if endAdorn != nil:
     endAdorn(ui, id)
   if trailing.hasButtonImage():
-    discard ui.image(id & ".trailing", trailing, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
+    discard ui.imageNode(id & ".trailing", trailing, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
 
   if measure != nil:
     ui.setMeasure(widgetId, measure)
@@ -430,64 +430,8 @@ proc inputField*(
   el.alignSelf = alignSelf
   discard ui.addWidget(el, parent)
   let shown = if text.len > 0: text else: placeholder
-  discard ui.text(id & ".text", shown, parentId = id, alignSelf = SelfCenter, expand = true, flex = 1, textAlign = TextLeft)
+  discard ui.textLabel(id & ".text", shown, parentId = id, alignSelf = SelfCenter, expand = true, flex = 1, textAlign = TextLeft)
   id
-
-macro button*(label, blk: untyped): untyped =
-  let buttonIdSym = genSym(nskLet, "buttonId")
-  let buttonElSym = genSym(nskVar, "buttonEl")
-  let buttonTextSym = genSym(nskVar, "buttonText")
-  let buttonParentSym = genSym(nskVar, "buttonParentId")
-  let buttonMeasureSym = genSym(nskVar, "buttonMeasure")
-  let buttonBody = if blk.kind == nnkStmtList: blk else: newStmtList(blk)
-  var setup = newStmtList()
-  var body = newStmtList()
-
-  for stmt in buttonBody:
-    if stmt.kind in {nnkAsgn, nnkExprEqExpr} and stmt[0].kind in {nnkIdent, nnkSym}:
-      let lhs = stmt[0].strVal
-      if lhs == "text" or lhs == "label":
-        setup.add newTree(nnkAsgn, buttonTextSym, stmt[1])
-      elif lhs == "parentId":
-        setup.add newTree(nnkAsgn, buttonParentSym, stmt[1])
-      elif lhs == "measure":
-        setup.add newTree(nnkAsgn, buttonMeasureSym, stmt[1])
-      else:
-        let fieldIdent = ident(lhs)
-        setup.add newTree(nnkAsgn, newDotExpr(buttonElSym, fieldIdent), stmt[1])
-    else:
-      body.add stmt
-
-  result = quote do:
-    block:
-      let `buttonIdSym` = $`label`
-      var `buttonTextSym` = `buttonIdSym`
-      var `buttonParentSym` = ""
-      var `buttonMeasureSym`: IntrinsicMeasureProc = nil
-      var `buttonElSym` = hboxElement(
-        `buttonIdSym`,
-        JustifyCenter,
-        AlignCenter,
-        6,
-        zeroSides(),
-        zeroSides(),
-        size(0, 0),
-        size(0, 0),
-        size(0, 0),
-        false,
-        0
-      )
-      `buttonElSym`.interactivity = ControlElement
-      `setup`
-      if `buttonElSym`.prefSize.w == 0 and `buttonElSym`.prefSize.h == 0 and `buttonElSym`.backgroundImage.hasButtonImage():
-        `buttonElSym`.prefSize = buttonImageSize(`buttonElSym`.backgroundImage)
-      discard ui.addWidget(`buttonElSym`, resolveParentId(ui, `buttonParentSym`))
-      if `buttonTextSym`.len > 0:
-        discard ui.text(`buttonIdSym` & ".label", `buttonTextSym`, parentId = `buttonIdSym`, alignSelf = SelfCenter, justifySelf = SelfCenter)
-      if `buttonMeasureSym` != nil:
-        ui.setMeasure(`buttonIdSym`, `buttonMeasureSym`)
-      let pressed {.inject.} = ui.clicked `buttonIdSym`
-      `body`
 
 type
   NotificationToast* = object
@@ -510,7 +454,7 @@ proc notificationMargin*(margin: int): int =
 proc notificationDuration*(durationSeconds: float): float =
   if durationSeconds > 0: durationSeconds else: 3.0
 
-widget NotificationStack:
+renderWidget NotificationStack:
   state:
     notifications: seq[NotificationToast] = @[]
     nextId: int = 0
@@ -530,7 +474,7 @@ widget NotificationStack:
         for item in state.notifications:
           let itemId = rootId & ".item." & $item.id
           panel(itemId, FilledPanel, boxOpts(align = AlignStretch, padding = uniformSides(8), prefSize = size(stackWidth, toastHeight))):
-            discard ui.text(itemId & ".message", item.message, prefSize = size(max(0, stackWidth - 16), max(0, toastHeight - 16)), alignSelf = SelfStretch)
+            discard ui.textLabel(itemId & ".message", item.message, prefSize = size(max(0, stackWidth - 16), max(0, toastHeight - 16)), alignSelf = SelfStretch)
 
       ui.setFloating(rootId, anchor = AnchorBottomRight, anchorToId = "", offsetX = -stackMargin, offsetY = -stackMargin)
 
@@ -559,7 +503,7 @@ proc updateNotifications*(state: var NotificationStack; deltaSeconds: float) =
 
 proc attachAdornment*(ui: var UI; hostId, adornId, text: string; prefSize = size(18, 18); anchor = AnchorTopRight; offsetX = -2; offsetY = 0): string =
   let parentId = ui.parentById.getOrDefault(hostId, "")
-  discard ui.text(adornId, text, parentId = parentId, prefSize = prefSize)
+  discard ui.textLabel(adornId, text, parentId = parentId, prefSize = prefSize)
   ui.setFloating(adornId, anchor = anchor, anchorToId = hostId, offsetX = offsetX, offsetY = offsetY)
   adornId
 
@@ -572,7 +516,7 @@ proc setAdornmentText*(ui: var UI; adornId, text: string) =
   el.text = text
   ui.elements[adornId] = el
 
-proc comboBox*(ui: var UI; id: string; items: openArray[string]; selectedIndex = 0; width = 180; itemHeight = 28): string =
+proc comboBox*(ui: var UI; id: string; items: openArray[string]; selectedIndex = 0; width = 180; itemHeight = 28): string {.discardable.} =
   let safeIndex =
     if items.len == 0: -1
     else: max(0, min(selectedIndex, items.len - 1))
@@ -759,9 +703,9 @@ template dialog*(id: string; title = ""; showHeader = true; showClose = true; op
     if showHeader:
       dialogHeader(id & ".header", boxOpts(justify = SpaceBetween, spacing = 4, padding = uniformSides(8), align = AlignStretch)):
         if title.len > 0:
-          discard ui.text(id & ".title", title, prefSize = size(260, 28), alignSelf = SelfStart)
+          discard ui.textLabel(id & ".title", title, prefSize = size(260, 28), alignSelf = SelfStart)
         else:
-          discard ui.box(id & ".title.spacer", prefSize = size(10, 28), expand = true, flex = 1)
+          discard ui.boxNode(id & ".title.spacer", prefSize = size(10, 28), expand = true, flex = 1)
         if showClose:
           discard ui.pushButton(dialogCloseId(id), "X", prefSize = size(84, 28))
     dialogBody(id & ".body"):

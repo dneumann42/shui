@@ -68,7 +68,7 @@ proc renderTemplate(widgetName, renderNode: NimNode): NimNode =
     renderBody
   )
 
-macro widget*(identifier, body: untyped): untyped =
+macro renderWidget*(identifier, body: untyped): untyped =
   expectKind(identifier, nnkIdent)
   expectKind(body, nnkStmtList)
 

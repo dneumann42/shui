@@ -89,7 +89,7 @@ proc appendCmdBranch(n, pname, cmdKind, applyField: NimNode): bool =
       return true
   false
 
-macro component*(identifier, body: untyped): untyped =
+macro widget*(identifier, body: untyped): untyped =
   expectKind(identifier, nnkIdent)
   expectKind(body, nnkStmtList)
   let
@@ -143,10 +143,10 @@ macro component*(identifier, body: untyped): untyped =
     elif head.kind == nnkIdent and head.strVal == "view":
       viewBody = secBody
     else:
-      error("unsupported component section", section)
+      error("unsupported widget section", section)
 
   if viewBody.isNil:
-    error("component requires a view section", body)
+    error("widget requires a view section", body)
 
   let cmdKind = ident(name & "Cmd")
   let cmdField = ident(lowerFirst(name) & "Cmd_apply")

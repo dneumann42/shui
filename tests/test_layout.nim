@@ -12,8 +12,8 @@ suite "layout engine":
     var ui = initUi()
     layout("root"):
       vbox("root", boxOpts(padding = uniformSides(10), spacing = 5, align = AlignStretch)):
-        discard ui.box("root.a", prefSize = size(0, 20))
-        discard ui.box("root.b", prefSize = size(0, 20))
+        discard ui.boxNode("root.a", prefSize = size(0, 20))
+        discard ui.boxNode("root.b", prefSize = size(0, 20))
     let o = layoutInRect(ui, "root", rect(0, 0, 100, 100))
     check o.r("root.a") == rect(10, 10, 80, 20)
     check o.r("root.b") == rect(10, 35, 80, 20)
@@ -23,7 +23,7 @@ suite "layout engine":
     var ui = initUi()
     layout("root"):
       vbox("root", boxOpts(padding = uniformSides(10), justify = JustifyEnd, align = AlignStretch)):
-        discard ui.box("root.a", prefSize = size(0, 20))
+        discard ui.boxNode("root.a", prefSize = size(0, 20))
     let a = layoutInRect(ui, "root", rect(0, 0, 100, 100)).r("root.a")
     check a.y + a.h == 90
 
@@ -31,8 +31,8 @@ suite "layout engine":
     var ui = initUi()
     layout("root"):
       hbox("root", boxOpts(spacing = 10, align = AlignStretch)):
-        discard ui.box("root.a", prefSize = size(20, 0))
-        discard ui.box("root.b", prefSize = size(20, 0))
+        discard ui.boxNode("root.a", prefSize = size(20, 0))
+        discard ui.boxNode("root.b", prefSize = size(20, 0))
     let o = layoutInRect(ui, "root", rect(0, 0, 100, 50))
     check o.r("root.a") == rect(0, 0, 20, 50)
     check o.r("root.b") == rect(30, 0, 20, 50)
@@ -41,8 +41,8 @@ suite "layout engine":
     var ui = initUi()
     layout("root"):
       hbox("root", boxOpts(align = AlignStretch)):
-        discard ui.box("root.a", prefSize = size(20, 0), expand = true, flex = 1)
-        discard ui.box("root.b", prefSize = size(20, 0), expand = true, flex = 1)
+        discard ui.boxNode("root.a", prefSize = size(20, 0), expand = true, flex = 1)
+        discard ui.boxNode("root.b", prefSize = size(20, 0), expand = true, flex = 1)
     let o = layoutInRect(ui, "root", rect(0, 0, 100, 50))
     check o.r("root.a").w == 50
     check o.r("root.b").w == 50
@@ -53,7 +53,7 @@ suite "layout engine":
     layout("root"):
       vbox("root", boxOpts(padding = uniformSides(10), align = AlignStretch)):
         vbox("root.inner", boxOpts(padding = uniformSides(5), align = AlignStretch)):
-          discard ui.box("root.inner.leaf", prefSize = size(0, 30))
+          discard ui.boxNode("root.inner.leaf", prefSize = size(0, 30))
     let o = layoutInRect(ui, "root", rect(0, 0, 100, 100))
     check o.r("root.inner") == rect(10, 10, 80, 40)
     let leaf = o.r("root.inner.leaf")
@@ -63,7 +63,7 @@ suite "layout engine":
     var ui = initUi()
     layout("root"):
       vbox("root", boxOpts(align = AlignStart)):
-        discard ui.box("root.a", prefSize = size(20, 20), margin = Sides(top: 5, left: 3))
+        discard ui.boxNode("root.a", prefSize = size(20, 20), margin = Sides(top: 5, left: 3))
     let a = layoutInRect(ui, "root", rect(0, 0, 100, 100)).r("root.a")
     check (a.x, a.y) == (3, 5)
 
@@ -71,8 +71,8 @@ suite "layout engine":
     var ui = initUi()
     layout("root"):
       hbox("root", boxOpts(justify = SpaceBetween, align = AlignStretch)):
-        discard ui.box("root.a", prefSize = size(20, 0))
-        discard ui.box("root.b", prefSize = size(20, 0))
+        discard ui.boxNode("root.a", prefSize = size(20, 0))
+        discard ui.boxNode("root.b", prefSize = size(20, 0))
     let o = layoutInRect(ui, "root", rect(0, 0, 100, 50))
     check o.r("root.a").x == 0
     check o.r("root.b").x + o.r("root.b").w == 100
@@ -82,9 +82,9 @@ suite "layout engine":
     layout("root"):
       relay("root", "| hero, 120px |\n| body, * |\n", boxOpts()):
         panel("root.hero", BorderedPanel, boxOpts(padding = uniformSides(10), spacing = 4, align = AlignStretch)):
-          discard ui.box("root.hero.head", prefSize = size(0, 30))
-          discard ui.box("root.hero.body", prefSize = size(0, 40))
-        discard ui.box("root.body", prefSize = size(0, 0))
+          discard ui.boxNode("root.hero.head", prefSize = size(0, 30))
+          discard ui.boxNode("root.hero.body", prefSize = size(0, 40))
+        discard ui.boxNode("root.body", prefSize = size(0, 0))
     let o = layoutInRect(ui, "root", rect(0, 0, 400, 400))
     let hero = o.r("root.hero")
     check hero.h == 120
@@ -98,10 +98,10 @@ suite "button label centering":
       relay("root", "| hero, " & $cellPx & "px |\n| rest, * |\n", boxOpts()):
         card("root.hero", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(10), align = AlignStretch)):
           cardHeader("root.hero.h"):
-            discard ui.text("root.hero.title", "Title", prefSize = size(520, 28), alignSelf = SelfCenter)
+            discard ui.textLabel("root.hero.title", "Title", prefSize = size(520, 28), alignSelf = SelfCenter)
           cardBody("root.hero.b", boxOpts(spacing = 6, padding = uniformSides(4), align = AlignCenter)):
             discard ui.pushButton("root.hero.btn", "Button", parentId = "root.hero.b", prefSize = size(240, 40))
-        discard ui.box("root.rest", prefSize = size(0, 0))
+        discard ui.boxNode("root.rest", prefSize = size(0, 0))
     let o = layoutInRect(ui, "root", rect(0, 0, 400, 400))
     (o.r("root.hero").y + o.r("root.hero").h, o.r("root.hero.btn").y + o.r("root.hero.btn").h)
 
