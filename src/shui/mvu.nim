@@ -76,6 +76,19 @@ proc rewriteUpdate(body, param: NimNode; kindMaps: Table[string, Table[string, s
         if umap.len > 0:
           br[^1] = rewriteFieldAccess(br[^1], param, umap)
 
+proc appendCmdBranch(n, pname, cmdKind, applyField: NimNode): bool =
+  if n.kind == nnkCaseStmt and n.len > 0 and n[0].kind == nnkDotExpr and
+     n[0].len == 2 and n[0][0].kind in {nnkIdent, nnkSym} and
+     n[0][0].strVal == pname.strVal and n[0][1].kind == nnkIdent and
+     n[0][1].strVal == "kind":
+    n.add nnkOfBranch.newTree(cmdKind,
+      newStmtList(newCall(newDotExpr(pname, applyField), ident"state")))
+    return true
+  for c in n:
+    if appendCmdBranch(c, pname, cmdKind, applyField):
+      return true
+  false
+
 macro component*(identifier, body: untyped): untyped =
   expectKind(identifier, nnkIdent)
   expectKind(body, nnkStmtList)
@@ -134,8 +147,19 @@ macro component*(identifier, body: untyped): untyped =
 
   if viewBody.isNil:
     error("component requires a view section", body)
-  if variants.len == 0:
-    variants.add (ident(name & "Idle"), newSeq[tuple[user, uniq, typ: NimNode]]())
+
+  let cmdKind = ident(name & "Cmd")
+  let cmdField = ident(lowerFirst(name) & "Cmd_apply")
+  proc cmdProcType(): NimNode =
+    nnkProcTy.newTree(
+      nnkFormalParams.newTree(newEmptyNode(),
+        nnkIdentDefs.newTree(ident"s", nnkVarTy.newTree(wType), newEmptyNode())),
+      nnkPragma.newTree(ident"closure"))
+  variants.add (cmdKind, @[(ident"apply", cmdField, cmdProcType())])
+  block:
+    var mp = initTable[string, string]()
+    mp["apply"] = cmdField.strVal
+    kindMaps[cmdKind.strVal] = mp
 
   var enumTy = nnkEnumTy.newTree(newEmptyNode())
   for v in variants:
@@ -177,10 +201,24 @@ macro component*(identifier, body: untyped): untyped =
         nnkBracketExpr.newTree(ident"typedesc", wType), newEmptyNode())),
     newEmptyNode(), newEmptyNode(), newStmtList(msgType))
 
+  result.add nnkProcDef.newTree(
+    exported(ident"command"), newEmptyNode(), newEmptyNode(),
+    nnkFormalParams.newTree(msgType,
+      nnkIdentDefs.newTree(ident"apply", cmdProcType(), newEmptyNode())),
+    newEmptyNode(), newEmptyNode(),
+    newStmtList(newCall(cmdKind, ident"apply")))
+
   let pname = if updateParam != nil: updateParam[0] else: ident"msg"
-  let ubody =
-    if updateBody != nil: rewriteUpdate(updateBody, pname, kindMaps)
-    else: newStmtList(nnkDiscardStmt.newTree(ident"state"), nnkDiscardStmt.newTree(pname))
+  var ubody: NimNode
+  if updateBody != nil:
+    ubody = rewriteUpdate(updateBody, pname, kindMaps)
+    discard appendCmdBranch(ubody, pname, cmdKind, cmdField)
+  else:
+    ubody = newStmtList(
+      nnkIfStmt.newTree(
+        nnkElifBranch.newTree(
+          nnkInfix.newTree(ident"==", newDotExpr(pname, ident"kind"), cmdKind),
+          newStmtList(newCall(newDotExpr(pname, cmdField), ident"state")))))
   result.add nnkProcDef.newTree(
     exported(ident"update"), newEmptyNode(), newEmptyNode(),
     nnkFormalParams.newTree(newEmptyNode(),
@@ -232,12 +270,30 @@ macro onKey*(id, code, message: untyped): untyped =
 template onText*(id; make): untyped {.dirty.} =
   disp.text(id, proc(ch: string): msgTypeFor(typeof(state)) = make(ch))
 
-template child*(childState; id: string; wrap): untyped {.dirty.} =
-  view(childState, ui, id, Dispatcher[msgTypeFor(typeof(childState))](
-    event: proc(cid: string; cev: UiEvent; cm: msgTypeFor(typeof(childState))) = disp.event(cid, cev, wrap(cm)),
-    text: proc(cid: string; make: proc(ch: string): msgTypeFor(typeof(childState))) =
-      disp.text(cid, proc(ch: string): msgTypeFor(typeof(state)) = wrap(make(ch))),
-    key: proc(cid: string; code: KeyCode; cm: msgTypeFor(typeof(childState))) = disp.key(cid, code, wrap(cm))))
+template child*(field; id: string; body: untyped): untyped {.dirty.} =
+  block:
+    type ParentT = typeof(state)
+    type ChildMsgT = msgTypeFor(typeof(state.field))
+    proc childEvent(cid: string; cev: UiEvent; cm: ChildMsgT) =
+      proc applyCmd(state: var ParentT) =
+        let m {.used.} = cm
+        body
+        update(state.field, cm)
+      disp.event(cid, cev, command(applyCmd))
+    proc childText(cid: string; make: proc(ch: string): ChildMsgT) =
+      proc parentMake(ch: string): msgTypeFor(ParentT) =
+        let cm = make(ch)
+        command(proc(state: var ParentT) = update(state.field, cm))
+      disp.text(cid, parentMake)
+    proc childKey(cid: string; code: KeyCode; cm: ChildMsgT) =
+      proc applyKey(state: var ParentT) = update(state.field, cm)
+      disp.key(cid, code, command(applyKey))
+    view(state.field, ui, id,
+      Dispatcher[ChildMsgT](event: childEvent, text: childText, key: childKey))
+
+template child*(field; id: string): untyped {.dirty.} =
+  child(field, id):
+    discard
 
 template mount*(childState; id: string): untyped {.dirty.} =
   view(childState, ui, id, Dispatcher[msgTypeFor(typeof(childState))](

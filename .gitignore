@@ -16,3 +16,4 @@ example/demo
 example/*.exe
 example/assets
 build
+example/counter

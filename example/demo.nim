@@ -155,20 +155,10 @@ component App:
     banner: ButtonImageSpec = ButtonImageSpec()
     glyph: ButtonImageSpec = ButtonImageSpec()
   msg:
-    LeftMsg(m: Counter.Msg)
-    RightMsg(m: Counter.Msg)
-    ProbeMsg(m: EventProbe.Msg)
-    TextMsg(m: TextDemo.Msg)
-    PickerMsg(m: PickerDemo.Msg)
     ToggleDialog
     SelectItem(index: int)
   update(m: Msg):
     case m
-    of LeftMsg: update(state.left, m.m)
-    of RightMsg: update(state.right, m.m)
-    of ProbeMsg: update(state.probe, m.m)
-    of TextMsg: update(state.text, m.m)
-    of PickerMsg: update(state.picker, m.m)
     of ToggleDialog: state.showDialog = not state.showDialog
     of SelectItem: state.selected = m.index
   view(rootId: string):
@@ -185,8 +175,10 @@ component App:
           on("root.hero.banner", Clicked, ToggleDialog)
 
       card("root.left", FilledPanel, boxOpts(spacing = 10, padding = uniformSides(10), align = AlignStretch)):
-        child(state.left, "root.left.a", LeftMsg)
-        child(state.right, "root.left.b", RightMsg)
+        child(left, "root.left.a")
+        child(right, "root.left.b"):
+          if m.kind == Reset:
+            state.left.count = 0
 
       card("root.middle", BorderedPanel, boxOpts(spacing = 8, padding = uniformSides(10), align = AlignStretch)):
         cardHeader("root.middle.h"):
@@ -201,8 +193,8 @@ component App:
           discard ui.pushButton("root.middle.ar", "Right", parentId = "root.middle.aligns", prefSize = size(80, 30), expand = true, flex = 1, labelAlign = LabelRight)
         discard ui.pushButton("root.middle.icon", "Leading image", parentId = "root.middle", prefSize = size(280, 32), leading = state.glyph)
         on("root.middle.icon", Clicked, ToggleDialog)
-        child(state.text, "root.middle.text", TextMsg)
-        child(state.picker, "root.middle.picker", PickerMsg)
+        child(text, "root.middle.text")
+        child(picker, "root.middle.picker")
         panel("root.middle.listpanel", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(6), align = AlignStretch, expand = true, flex = 1)):
           discard ui.text("root.middle.listtitle", "Scroll wheel + selectable list", prefSize = size(280, 18))
           scrollV("root.middle.list", viewportOpts = boxOpts(expand = true, flex = 1, align = AlignStretch), contentOpts = boxOpts(spacing = 4, padding = uniformSides(4), align = AlignStretch)):
@@ -212,7 +204,7 @@ component App:
               on(iid, Clicked, SelectItem(i))
         discard ui.text("root.middle.sel", "Selected: item " & $(state.selected + 1), prefSize = size(280, 20))
 
-      child(state.probe, "root.right", ProbeMsg)
+      child(probe, "root.right")
 
       card("root.footer", BorderedPanel, boxOpts(spacing = 4, padding = uniformSides(8), align = AlignStretch)):
         cardFooter("root.footer.row", boxOpts(justify = SpaceBetween, align = AlignCenter, padding = uniformSides(4))):
@@ -232,26 +224,12 @@ component App:
 
 proc selfTest() =
   var app = App()
-
-  update(app, LeftMsg(Increment()))
-  doAssert app.left.count == 1
-  update(app, ProbeMsg(Press()))
-  update(app, ProbeMsg(Enter()))
-  doAssert app.probe.presses == 1 and app.probe.enters == 1
-  update(app, TextMsg(Typed("a")))
-  update(app, TextMsg(Typed("b")))
-  doAssert app.text.value == "ab"
-  update(app, TextMsg(Backspace()))
-  doAssert app.text.value == "a"
-  update(app, PickerMsg(Toggle()))
-  doAssert app.picker.open
-  update(app, PickerMsg(Pick(2)))
-  doAssert app.picker.sel == 2 and not app.picker.open
   update(app, ToggleDialog())
   doAssert app.showDialog
   update(app, SelectItem(7))
   doAssert app.selected == 7
 
+  app.picker.open = true
   var ui = initUi()
   beginFrame(ui)
   var ev = initTable[(string, UiEvent), AppMsg]()
@@ -262,13 +240,28 @@ proc selfTest() =
     text: proc(id: string; make: proc(ch: string): AppMsg) = tx[id] = make,
     key: proc(id: string; code: KeyCode; m: AppMsg) = ky[(id, code)] = m)
   view(app, ui, "root", disp)
+
   doAssert ("root.left.a.inc", Clicked) in ev
-  doAssert ("root.right.btn", HoverIn) in ev
+  let before = app.left.count
+  update(app, ev[("root.left.a.inc", Clicked)])
+  doAssert app.left.count == before + app.left.step
+
+  app.left.count = 5
+  app.right.count = 9
+  doAssert ("root.left.b.reset", Clicked) in ev
+  update(app, ev[("root.left.b.reset", Clicked)])
+  doAssert app.right.count == 0
+  doAssert app.left.count == 0
+
   doAssert "root.middle.text.box" in tx
   doAssert ("root.middle.text.box", KeyBackspace) in ky
   let n = app.text.value.len
   update(app, tx["root.middle.text.box"]("z"))
   doAssert app.text.value.len == n + 1
+
+  doAssert ("root.middle.picker.combo.opt.1", Clicked) in ev
+  update(app, ev[("root.middle.picker.combo.opt.1", Clicked)])
+  doAssert app.picker.sel == 1
   echo "demo self-test passed"
 
 proc guiMain() =
