@@ -322,6 +322,7 @@ proc pushButton*(
   id: string;
   label: string;
   parentId = "";
+  selected = false;
   measure: IntrinsicMeasureProc = nil;
   margin = zeroSides();
   minSize = size(0, 0);
@@ -358,6 +359,7 @@ proc pushButton*(
       prefSize
 
   var el = hboxElement(id, justify, align, spacing, padding, margin, minSize, resolvedPrefSize, maxSize, expand, flex)
+  el.selected = selected
   el.interactivity = interactivity
   el.surfaceStyle = surfaceStyle
   el.visible = visible
@@ -528,9 +530,14 @@ proc comboBox*(ui: var UI; id: string; items: openArray[string]; selectedIndex =
     else: max(0, min(selectedIndex, items.len - 1))
   let selectedLabel = if safeIndex >= 0: items[safeIndex] else: ""
 
-  discard ui.addWidget(vboxElement(id, JustifyStart, AlignStretch, 0, zeroSides(), zeroSides(), size(0, 0), size(width, itemHeight), size(0, 0), false, 0), resolveParentId(ui, ""))
+  discard ui.addWidget(vboxElement(
+    id, JustifyStart, AlignStretch, 0, zeroSides(), zeroSides(), size(0, 0), size(width, itemHeight), size(0, 0), false, 0), resolveParentId(ui, ""))
   let triggerId = id & ".trigger"
   discard ui.pushButton(triggerId, selectedLabel, parentId = id, prefSize = size(width, itemHeight))
+
+  # if ui.clicked triggerId:
+  #   echo "CLICKED!"
+  
   if triggerId in ui.elements:
     var trigger = ui.elements[triggerId]
     trigger.surfaceStyle = SurfaceBordered
@@ -539,7 +546,8 @@ proc comboBox*(ui: var UI; id: string; items: openArray[string]; selectedIndex =
   discard ui.attachAdornment(triggerId, indicatorId, "v", prefSize = size(20, itemHeight), anchor = AnchorTopRight, offsetX = -4, offsetY = 0)
 
   let menuId = id & ".menu"
-  var menu = vboxElement(menuId, JustifyStart, AlignStretch, 2, uniformSides(4), zeroSides(), size(0, 0), size(width, max(0, items.len * itemHeight + 8)), size(0, 0), false, 0)
+  var menu = vboxElement(
+    menuId, JustifyStart, AlignStretch, 2, uniformSides(4), zeroSides(), size(0, 0), size(width, max(0, items.len * itemHeight + 8)), size(0, 0), false, 0)
   menu.surfaceStyle = SurfaceBordered
   discard ui.addWidget(menu, id)
   ui.setFloating(menuId, anchor = AnchorTopLeft, anchorToId = triggerId, offsetX = 0, offsetY = itemHeight + 2)

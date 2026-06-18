@@ -152,7 +152,7 @@ proc drawNode(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
   of VBox, HBox, RelayContainer:
     if el.interactivity == ControlElement:
       let bg =
-        if ui.clickedId == id: cfg.buttonPressedColor
+        if el.selected or ui.clickedId == id: cfg.buttonPressedColor
         elif ui.hoveredId == id: cfg.buttonHoverColor
         else: cfg.buttonColor
       if el.backgroundImage.hasButtonImage():

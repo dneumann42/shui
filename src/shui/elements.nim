@@ -84,6 +84,7 @@ type
 
   Element* = object
     id*: string
+    selected*: bool
     interactivity*: Interactivity
     surfaceStyle*: SurfaceStyle
     visible*: bool

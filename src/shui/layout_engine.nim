@@ -171,7 +171,7 @@ proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
     return
   rects[id] = rect
   logs.logLine(logEnabled, fmt"arrange id={id} kind={el.kind} rect=({rect.x},{rect.y},{rect.w},{rect.h})")
-  if el.kind == Box or el.kind == Text:
+  if el.kind in {Box, Text, Image}:
     return
 
   let content = innerRect(rect, el.padding)
