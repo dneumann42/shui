@@ -67,7 +67,7 @@ proc boxElement*(id: string; margin = zeroSides(); minSize = size(0, 0); prefSiz
     justifySelf: SelfAuto,
   )
 
-proc textElement*(id: string; text: string; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): Element =
+proc textElement*(id: string; text: string; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto; textAlign = TextCenter): Element =
   Element(
     id: id,
     kind: Text,
@@ -88,6 +88,7 @@ proc textElement*(id: string; text: string; margin = zeroSides(); minSize = size
     flex: flex,
     alignSelf: alignSelf,
     justifySelf: justifySelf,
+    textAlign: textAlign,
   )
 
 proc vboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): Element =
@@ -290,8 +291,8 @@ proc box*(ui: var UI; id: string; parentId = ""; measure: IntrinsicMeasureProc =
     ui.setMeasure(widgetId, measure)
   widgetId
 
-proc text*(ui: var UI; id: string; value: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto): string =
-  let widgetId = ui.addWidget(textElement(id, value, margin, minSize, prefSize, maxSize, expand, flex, alignSelf, justifySelf), resolveParentId(ui, parentId))
+proc text*(ui: var UI; id: string; value: string; parentId = ""; measure: IntrinsicMeasureProc = nil; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; alignSelf = SelfAuto; justifySelf = SelfAuto; textAlign = TextCenter): string =
+  let widgetId = ui.addWidget(textElement(id, value, margin, minSize, prefSize, maxSize, expand, flex, alignSelf, justifySelf, textAlign), resolveParentId(ui, parentId))
   if measure != nil:
     ui.setMeasure(widgetId, measure)
   widgetId
@@ -396,7 +397,12 @@ proc pushButton*(
   if startAdorn != nil:
     startAdorn(ui, id)
   if label.len > 0:
-    discard ui.text(id & ".label", label, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
+    let ta = case labelAlign
+      of LabelLeft: TextLeft
+      of LabelRight: TextRight
+      of LabelCenter: TextCenter
+    discard ui.text(id & ".label", label, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter,
+      expand = true, flex = 1, textAlign = ta)
   if endAdorn != nil:
     endAdorn(ui, id)
   if trailing.hasButtonImage():
@@ -405,6 +411,27 @@ proc pushButton*(
   if measure != nil:
     ui.setMeasure(widgetId, measure)
   widgetId
+
+proc inputField*(
+  ui: var UI;
+  id: string;
+  text: string;
+  placeholder = "";
+  parentId = "";
+  prefSize = size(220, 32);
+  expand = false;
+  flex = 0;
+  alignSelf = SelfAuto
+): string {.discardable.} =
+  let parent = resolveParentId(ui, parentId)
+  var el = hboxElement(id, JustifyStart, AlignCenter, 0, uniformSides(8), zeroSides(), size(0, 0), prefSize, size(0, 0), expand, flex)
+  el.interactivity = ControlElement
+  el.surfaceStyle = SurfaceBordered
+  el.alignSelf = alignSelf
+  discard ui.addWidget(el, parent)
+  let shown = if text.len > 0: text else: placeholder
+  discard ui.text(id & ".text", shown, parentId = id, alignSelf = SelfCenter, expand = true, flex = 1, textAlign = TextLeft)
+  id
 
 macro button*(label, blk: untyped): untyped =
   let buttonIdSym = genSym(nskLet, "buttonId")

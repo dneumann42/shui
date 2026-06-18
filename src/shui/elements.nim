@@ -45,6 +45,11 @@ type
     SurfaceFilled
     SurfaceBordered
 
+  TextAlign* = enum
+    TextCenter
+    TextLeft
+    TextRight
+
   PositionMode* = enum
     FlowPosition
     FloatingPosition
@@ -103,6 +108,7 @@ type
     justifySelf*: SelfAlign
     backgroundImage*: ButtonImageSpec
     hideSurface*: bool
+    textAlign*: TextAlign
     case kind*: ElementKind
     of Box:
       discard

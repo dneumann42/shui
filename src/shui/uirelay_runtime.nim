@@ -231,7 +231,11 @@ proc drawNode(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
         textBg = cfg.panelInnerColor
     if font != Font(0):
       let ext = measureText(font, el.text)
-      let tx = r.x + max(0, (r.w - ext.w) div 2)
+      let tx =
+        case el.textAlign
+        of TextLeft: r.x
+        of TextRight: r.x + max(0, r.w - ext.w)
+        of TextCenter: r.x + max(0, (r.w - ext.w) div 2)
       let ty = r.y + max(0, (r.h - ext.h) div 2)
       discard drawText(font, tx, ty, el.text, cfg.textColor, textBg)
 
@@ -332,14 +336,29 @@ proc drawTreeFlow(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeCo
     drawTreeFlow(ui, childId, rects, cfg, font, nextClip)
   setClipRect(activeClip)
 
-proc drawFloatingOverlays(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font; activeClip: Rect) =
+proc collectFloating(ui: UI; id: string; acc: var seq[string]) =
   for childId in ui.childrenById.getOrDefault(id, @[]):
     if ui.elements[childId].positionMode == FloatingPosition:
-      # Draw the full floating subtree on top.
-      drawTreeFlow(ui, childId, rects, cfg, font, activeClip)
-      drawFloatingOverlays(ui, childId, rects, cfg, font, activeClip)
-    else:
-      drawFloatingOverlays(ui, childId, rects, cfg, font, activeClip)
+      acc.add childId
+    collectFloating(ui, childId, acc)
+
+proc isScrollContent(ui: UI; id: string): bool =
+  for _, s in ui.scrollByViewport:
+    if s.contentId == id:
+      return true
+  false
+
+proc drawFloatingOverlays(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig; font: Font; activeClip: Rect) =
+  var floats: seq[string] = @[]
+  collectFloating(ui, id, floats)
+  # Scroll contents are an implementation detail of viewports; draw them first
+  # so genuine popovers (menus, dialogs) layer on top.
+  for f in floats:
+    if ui.isScrollContent(f):
+      drawTreeFlow(ui, f, rects, cfg, font, activeClip)
+  for f in floats:
+    if not ui.isScrollContent(f):
+      drawTreeFlow(ui, f, rects, cfg, font, activeClip)
 
 proc findHoveredControlFlow(ui: UI; id: string; rects: Table[string, Rect]; p: Point): string =
   let sc = ui.isInScrolledContent(id)

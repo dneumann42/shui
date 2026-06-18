@@ -5,6 +5,8 @@ when not defined(shuiHostedOnly):
 import ./[elements, uirelay_runtime]
 
 export uirelay_runtime
+export input
+export tables
 
 type UiEvent* = enum
   Clicked
@@ -12,6 +14,11 @@ type UiEvent* = enum
   Released
   HoverIn
   HoverOut
+
+type Dispatcher*[M] = object
+  event*: proc(id: string; ev: UiEvent; m: M) {.closure.}
+  text*: proc(id: string; make: proc(ch: string): M {.closure.}) {.closure.}
+  key*: proc(id: string; code: KeyCode; m: M) {.closure.}
 
 proc exported(name: NimNode): NimNode =
   nnkPostfix.newTree(ident"*", name)
@@ -186,14 +193,8 @@ macro component*(identifier, body: untyped): untyped =
     nnkIdentDefs.newTree(ident"ui", nnkVarTy.newTree(ident"UI"), newEmptyNode()))
   for vp in viewParams:
     vparams.add nnkIdentDefs.newTree(vp[0], vp[1], newEmptyNode())
-  vparams.add nnkIdentDefs.newTree(ident"sink",
-    nnkProcTy.newTree(
-      nnkFormalParams.newTree(newEmptyNode(),
-        nnkIdentDefs.newTree(ident"id", ident"string", newEmptyNode()),
-        nnkIdentDefs.newTree(ident"ev", ident"UiEvent", newEmptyNode()),
-        nnkIdentDefs.newTree(ident"m", msgType, newEmptyNode())),
-      nnkPragma.newTree(ident"closure")),
-    newEmptyNode())
+  vparams.add nnkIdentDefs.newTree(ident"disp",
+    nnkBracketExpr.newTree(ident"Dispatcher", msgType), newEmptyNode())
   result.add nnkProcDef.newTree(
     exported(ident"view"), newEmptyNode(), newEmptyNode(), vparams,
     newEmptyNode(), newEmptyNode(), viewBody)
@@ -208,26 +209,52 @@ proc msgCtorExpr(message: NimNode): NimNode =
   case message.kind
   of nnkIdent, nnkSym, nnkOpenSymChoice, nnkClosedSymChoice, nnkAccQuoted:
     result = newCall(ident(nameOf(message)))
-  of nnkObjConstr:
+  of nnkObjConstr, nnkCall, nnkCommand:
     result = newCall(ident(nameOf(message[0])))
     for i in 1 ..< message.len:
-      result.add nnkExprEqExpr.newTree(message[i][0], message[i][1])
+      let a = message[i]
+      if a.kind == nnkExprColonExpr:
+        result.add nnkExprEqExpr.newTree(a[0], a[1])
+      else:
+        result.add a
   else:
     result = message
 
 macro on*(id, event, message: untyped): untyped =
-  newCall(ident"sink", id, event, msgCtorExpr(message))
+  newCall(newDotExpr(ident"disp", ident"event"), id, event, msgCtorExpr(message))
 
 macro emit*(id, message, body: untyped): untyped =
-  newStmtList(body, newCall(ident"sink", id, ident"Clicked", msgCtorExpr(message)))
+  newStmtList(body, newCall(newDotExpr(ident"disp", ident"event"), id, ident"Clicked", msgCtorExpr(message)))
+
+macro onKey*(id, code, message: untyped): untyped =
+  newCall(newDotExpr(ident"disp", ident"key"), id, code, msgCtorExpr(message))
+
+template onText*(id; make): untyped {.dirty.} =
+  disp.text(id, proc(ch: string): msgTypeFor(typeof(state)) = make(ch))
 
 template child*(childState; id: string; wrap): untyped {.dirty.} =
-  view(childState, ui, id,
-    proc(cid: string; cev: UiEvent; cm: msgTypeFor(typeof(childState))) = sink(cid, cev, wrap(cm)))
+  view(childState, ui, id, Dispatcher[msgTypeFor(typeof(childState))](
+    event: proc(cid: string; cev: UiEvent; cm: msgTypeFor(typeof(childState))) = disp.event(cid, cev, wrap(cm)),
+    text: proc(cid: string; make: proc(ch: string): msgTypeFor(typeof(childState))) =
+      disp.text(cid, proc(ch: string): msgTypeFor(typeof(state)) = wrap(make(ch))),
+    key: proc(cid: string; code: KeyCode; cm: msgTypeFor(typeof(childState))) = disp.key(cid, code, wrap(cm))))
 
 template mount*(childState; id: string): untyped {.dirty.} =
-  view(childState, ui, id,
-    proc(cid: string; cev: UiEvent; cm: msgTypeFor(typeof(childState))) = discard)
+  view(childState, ui, id, Dispatcher[msgTypeFor(typeof(childState))](
+    event: proc(cid: string; cev: UiEvent; cm: msgTypeFor(typeof(childState))) = discard,
+    text: proc(cid: string; make: proc(ch: string): msgTypeFor(typeof(childState))) = discard,
+    key: proc(cid: string; code: KeyCode; cm: msgTypeFor(typeof(childState))) = discard))
+
+proc scrolledViewportAt(ui: UI; rects: Table[string, Rect]; p: Point): string =
+  var bestArea = high(int)
+  for vp, s in ui.scrollByViewport:
+    if not s.enableY:
+      continue
+    if vp in rects and rects[vp].contains(p):
+      let a = rects[vp].w * rects[vp].h
+      if a < bestArea:
+        bestArea = a
+        result = vp
 
 proc runProgram*[W](model: var W; rootId: string; cfg = defaultRuntimeConfig()) =
   mixin msgTypeFor, view, update
@@ -248,31 +275,42 @@ proc runProgram*[W](model: var W; rootId: string; cfg = defaultRuntimeConfig()) 
     echo "[shui] no usable font found; set cfg.fontPath or SHUI_FONT_PATH for text rendering"
 
   var ui = initUi()
-  var bindings = initTable[(string, UiEvent), msgTypeFor(W)]()
-  proc sink(id: string; ev: UiEvent; m: msgTypeFor(W)) = bindings[(id, ev)] = m
-
-  template fire(targetId: string; uiEv: UiEvent) =
-    if targetId.len > 0 and (targetId, uiEv) in bindings:
-      update(model, bindings[(targetId, uiEv)])
+  type MsgT = msgTypeFor(W)
+  var eventBindings = initTable[(string, UiEvent), MsgT]()
+  var textBindings = initTable[string, proc(ch: string): MsgT {.closure.}]()
+  var keyBindings = initTable[(string, KeyCode), MsgT]()
+  let disp = Dispatcher[MsgT](
+    event: proc(id: string; ev: UiEvent; m: MsgT) = eventBindings[(id, ev)] = m,
+    text: proc(id: string; make: proc(ch: string): MsgT {.closure.}) = textBindings[id] = make,
+    key: proc(id: string; code: KeyCode; m: MsgT) = keyBindings[(id, code)] = m)
 
   var running = true
   var hosted = initHostedUiState()
   var pressedId = ""
   var prevHovered = ""
+  var focusedId = ""
   var scrollMem = initTable[string, (int, int)]()
   while running:
     beginFrame(ui)
-    bindings.clear()
-    view(model, ui, rootId, sink)
+    eventBindings.clear()
+    textBindings.clear()
+    keyBindings.clear()
+    view(model, ui, rootId, disp)
     if font != Font(0):
       ui.ensureTextMeasures(font)
     for vp, off in scrollMem:
       ui.setScrollOffset(vp, off[0], off[1])
+      if vp in ui.scrollByViewport:
+        ui.setFloating(ui.scrollByViewport[vp].contentId, anchor = AnchorTopLeft, anchorToId = vp, offsetX = -off[0], offsetY = -off[1])
 
     var frame = ui.layoutFrame(rootId, screenLayout.width, screenLayout.height, cfg)
 
+    if focusedId.len > 0 and focusedId notin textBindings:
+      focusedId = ""
+    let flags = if focusedId.len > 0: {WantTextInput} else: {}
+
     var ev: Event
-    while pollEvent(ev):
+    while pollEvent(ev, flags):
       case ev.kind
       of QuitEvent, WindowCloseEvent:
         running = false
@@ -280,6 +318,13 @@ proc runProgram*[W](model: var W; rootId: string; cfg = defaultRuntimeConfig()) 
         screenLayout.width = ev.x
         screenLayout.height = ev.y
         frame = ui.layoutFrame(rootId, screenLayout.width, screenLayout.height, cfg)
+      of MouseWheelEvent:
+        if frame.ok:
+          let vp = scrolledViewportAt(ui, frame.rects, point(hosted.mouseX, hosted.mouseY))
+          if vp.len > 0 and vp in ui.scrollByViewport:
+            var s = ui.scrollByViewport[vp]
+            s.offsetY = max(0, s.offsetY - ev.y * 40)
+            ui.scrollByViewport[vp] = s
       else:
         discard
       discard ui.handleEvent(hosted, rootId, cfg, ev, screenLayout.width, screenLayout.height)
@@ -287,19 +332,32 @@ proc runProgram*[W](model: var W; rootId: string; cfg = defaultRuntimeConfig()) 
         if ev.kind == MouseDownEvent and ev.button == LeftButton:
           let hit = ui.hitTestControlId(rootId, frame.rects, point(ev.x, ev.y))
           pressedId = hit
-          fire(hit, Pressed)
+          focusedId = if hit in textBindings: hit else: ""
+          if hit.len > 0 and (hit, Pressed) in eventBindings:
+            update(model, eventBindings[(hit, Pressed)])
         elif ev.kind == MouseUpEvent and ev.button == LeftButton:
           let hit = ui.hitTestControlId(rootId, frame.rects, point(ev.x, ev.y))
-          fire(hit, Released)
-          if hit.len > 0 and hit == pressedId:
-            fire(hit, Clicked)
+          if hit.len > 0 and (hit, Released) in eventBindings:
+            update(model, eventBindings[(hit, Released)])
+          if hit.len > 0 and hit == pressedId and (hit, Clicked) in eventBindings:
+            update(model, eventBindings[(hit, Clicked)])
           pressedId = ""
+        elif ev.kind == TextInputEvent and focusedId in textBindings:
+          var ch = ""
+          for c in ev.text:
+            if c != '\0': ch.add c
+          if ch.len > 0:
+            update(model, textBindings[focusedId](ch))
+        elif ev.kind == KeyDownEvent and (focusedId, ev.key) in keyBindings:
+          update(model, keyBindings[(focusedId, ev.key)])
 
     if frame.ok and hosted.mouseX >= 0:
       let hov = ui.hitTestControlId(rootId, frame.rects, point(hosted.mouseX, hosted.mouseY))
       if hov != prevHovered:
-        fire(prevHovered, HoverOut)
-        fire(hov, HoverIn)
+        if prevHovered.len > 0 and (prevHovered, HoverOut) in eventBindings:
+          update(model, eventBindings[(prevHovered, HoverOut)])
+        if hov.len > 0 and (hov, HoverIn) in eventBindings:
+          update(model, eventBindings[(hov, HoverIn)])
         prevHovered = hov
 
     scrollMem.clear()
