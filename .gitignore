@@ -11,6 +11,7 @@ nimbledeps
 tests/test_number_input
 tests/test1
 tests/t*
-example/counter
+example/demo
 example/*.exe
+example/assets
 build

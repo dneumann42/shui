@@ -98,7 +98,7 @@ proc ensureTextMeasures*(ui: var UI; f: Font) =
       size(ext.w, ext.h)
     )
 
-proc findFontPath(preferred: string): string =
+proc findFontPath*(preferred: string): string =
   if preferred.len > 0 and stdos.fileExists(preferred):
     return preferred
 
@@ -137,6 +137,33 @@ proc drawSurface(r: Rect; style: SurfaceStyle; baseColor: Color; cfg: RuntimeCon
     fillRect(r, cfg.panelInnerColor)
     drawBorder(r, cfg.panelBorderColor)
 
+proc adjustColor(c: Color; delta: int): Color =
+  proc clamp8(v: int): uint8 = uint8(max(0, min(255, v)))
+  color(clamp8(c.r.int + delta), clamp8(c.g.int + delta), clamp8(c.b.int + delta), c.a)
+
+proc drawBevel(r: Rect; topLeft, bottomRight: Color) =
+  if r.w <= 1 or r.h <= 1:
+    return
+  drawLine(r.x, r.y, r.x + r.w - 1, r.y, topLeft)
+  drawLine(r.x, r.y, r.x, r.y + r.h - 1, topLeft)
+  drawLine(r.x, r.y + r.h - 1, r.x + r.w - 1, r.y + r.h - 1, bottomRight)
+  drawLine(r.x + r.w - 1, r.y, r.x + r.w - 1, r.y + r.h - 1, bottomRight)
+
+proc drawControlSurface(r: Rect; style: SurfaceStyle; bg: Color; pressed: bool; cfg: RuntimeConfig) =
+  drawSurface(r, style, bg, cfg)
+  let light = adjustColor(bg, 36)
+  let dark = adjustColor(bg, -42)
+  if pressed:
+    drawBevel(r, dark, light)
+  else:
+    drawBevel(r, light, dark)
+
+proc drawSubtleFeedback(r: Rect; bg: Color; pressed, hovered: bool) =
+  if pressed:
+    fillRect(r, color(bg.r, bg.g, bg.b, 80'u8))
+  elif hovered:
+    fillRect(r, color(bg.r, bg.g, bg.b, 38'u8))
+
 proc drawButtonImage(spec: ButtonImageSpec; dst: Rect): bool =
   if buttonImageDrawHook.isNil:
     return false
@@ -151,20 +178,22 @@ proc drawNode(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
   case el.kind
   of VBox, HBox, RelayContainer:
     if el.interactivity == ControlElement:
+      let pressed = el.selected or ui.clickedId == id
+      let hovered = ui.hoveredId == id
       let bg =
-        if el.selected or ui.clickedId == id: cfg.buttonPressedColor
-        elif ui.hoveredId == id: cfg.buttonHoverColor
+        if pressed: cfg.buttonPressedColor
+        elif hovered: cfg.buttonHoverColor
         else: cfg.buttonColor
-      if el.backgroundImage.hasButtonImage():
+      if el.hideSurface:
+        drawSubtleFeedback(r, bg, pressed, hovered)
+      elif el.backgroundImage.hasButtonImage():
         if drawButtonImage(el.backgroundImage, r):
           fillRect(r, color(bg.r, bg.g, bg.b, 96'u8))
           drawBorder(r, cfg.buttonBorderColor)
         else:
-          drawSurface(r, el.surfaceStyle, bg, cfg)
-          drawBorder(r, cfg.buttonBorderColor)
+          drawControlSurface(r, el.surfaceStyle, bg, pressed, cfg)
       else:
-        drawSurface(r, el.surfaceStyle, bg, cfg)
-        drawBorder(r, cfg.buttonBorderColor)
+        drawControlSurface(r, el.surfaceStyle, bg, pressed, cfg)
     else:
       drawSurface(r, el.surfaceStyle, cfg.containerColor, cfg)
   of Box:
@@ -175,17 +204,21 @@ proc drawNode(ui: UI; id: string; rects: Table[string, Rect]; cfg: RuntimeConfig
     let isControl = el.interactivity == ControlElement
     var textBg = color(0, 0, 0, 0)
     if isControl:
+      let pressed = ui.clickedId == id
+      let hovered = ui.hoveredId == id
       let bg =
-        if ui.clickedId == id: cfg.buttonPressedColor
-        elif ui.hoveredId == id: cfg.buttonHoverColor
+        if pressed: cfg.buttonPressedColor
+        elif hovered: cfg.buttonHoverColor
         else: cfg.buttonColor
-      drawSurface(r, el.surfaceStyle, bg, cfg)
-      drawBorder(r, cfg.buttonBorderColor)
-      textBg =
-        case el.surfaceStyle
-        of SurfaceAuto: bg
-        of SurfaceFilled: cfg.panelFillColor
-        of SurfaceBordered: cfg.panelInnerColor
+      if el.hideSurface:
+        drawSubtleFeedback(r, bg, pressed, hovered)
+      else:
+        drawControlSurface(r, el.surfaceStyle, bg, pressed, cfg)
+        textBg =
+          case el.surfaceStyle
+          of SurfaceAuto: bg
+          of SurfaceFilled: cfg.panelFillColor
+          of SurfaceBordered: cfg.panelInnerColor
     else:
       case el.surfaceStyle
       of SurfaceAuto:

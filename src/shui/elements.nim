@@ -102,6 +102,7 @@ type
     alignSelf*: SelfAlign
     justifySelf*: SelfAlign
     backgroundImage*: ButtonImageSpec
+    hideSurface*: bool
     case kind*: ElementKind
     of Box:
       discard

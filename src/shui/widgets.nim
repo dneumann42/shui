@@ -18,6 +18,19 @@ type
     FilledPanel
     BorderedPanel
 
+  LabelAlign* = enum
+    LabelCenter
+    LabelLeft
+    LabelRight
+
+  AdornProc* = proc(ui: var UI; parentId: string) {.closure.}
+
+proc labelJustify*(a: LabelAlign): Justify =
+  case a
+  of LabelCenter: JustifyCenter
+  of LabelLeft: JustifyStart
+  of LabelRight: JustifyEnd
+
 proc boxOpts*(justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): BoxOpts =
   BoxOpts(
     justify: justify,
@@ -340,14 +353,17 @@ proc pushButton*(
   offsetX = 0;
   offsetY = 0;
   interactivity = ControlElement;
-  justify = JustifyStart;
+  labelAlign = LabelCenter;
   align = AlignCenter;
   spacing = 6;
   padding = zeroSides();
   relayLayout = "";
+  showBackground = true;
   leading: ButtonImageSpec = ButtonImageSpec();
   trailing: ButtonImageSpec = ButtonImageSpec();
-  background: ButtonImageSpec = ButtonImageSpec()
+  background: ButtonImageSpec = ButtonImageSpec();
+  startAdorn: AdornProc = nil;
+  endAdorn: AdornProc = nil
 ): string {.discardable.} =
   let parentResolved = resolveParentId(ui, parentId)
   let resolvedPrefSize =
@@ -358,7 +374,7 @@ proc pushButton*(
     else:
       prefSize
 
-  var el = hboxElement(id, justify, align, spacing, padding, margin, minSize, resolvedPrefSize, maxSize, expand, flex)
+  var el = hboxElement(id, labelJustify(labelAlign), align, spacing, padding, margin, minSize, resolvedPrefSize, maxSize, expand, flex)
   el.selected = selected
   el.interactivity = interactivity
   el.surfaceStyle = surfaceStyle
@@ -372,12 +388,17 @@ proc pushButton*(
   el.justifySelf = justifySelf
   el.backgroundImage = background
   el.relayLayout = relayLayout
+  el.hideSurface = not showBackground
   let widgetId = ui.addWidget(el, parentResolved)
 
   if leading.hasButtonImage():
     discard ui.image(id & ".leading", leading, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
+  if startAdorn != nil:
+    startAdorn(ui, id)
   if label.len > 0:
     discard ui.text(id & ".label", label, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
+  if endAdorn != nil:
+    endAdorn(ui, id)
   if trailing.hasButtonImage():
     discard ui.image(id & ".trailing", trailing, parentId = id, alignSelf = SelfCenter, justifySelf = SelfCenter)
 
@@ -418,7 +439,7 @@ macro button*(label, blk: untyped): untyped =
       var `buttonMeasureSym`: IntrinsicMeasureProc = nil
       var `buttonElSym` = hboxElement(
         `buttonIdSym`,
-        JustifyStart,
+        JustifyCenter,
         AlignCenter,
         6,
         zeroSides(),

@@ -12,3 +12,7 @@ srcDir        = "src"
 requires "nim >= 2.2.10"
 
 requires "https://github.com/nim-lang/uirelays.git"
+requires "https://github.com/nim-lang/sdl3"
+
+task example, "Build and run the SDL3 MVU demo":
+  exec "nim c -r --define:sdl3 --path:src example/demo.nim"
