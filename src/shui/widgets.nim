@@ -13,6 +13,7 @@ type
     maxSize*: Size
     expand*: bool
     flex*: int
+    relayLayout*: string
 
   PanelStyle* = enum
     FilledPanel
@@ -31,7 +32,7 @@ proc labelJustify*(a: LabelAlign): Justify =
   of LabelLeft: JustifyStart
   of LabelRight: JustifyEnd
 
-proc boxOpts*(justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): BoxOpts =
+proc boxOpts*(justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; relayLayout = ""): BoxOpts =
   BoxOpts(
     justify: justify,
     align: align,
@@ -43,6 +44,7 @@ proc boxOpts*(justify = JustifyStart; align = AlignStart; spacing = 0; padding =
     maxSize: maxSize,
     expand: expand,
     flex: flex,
+    relayLayout: relayLayout,
   )
 
 proc boxElement*(id: string; margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): Element =
@@ -91,7 +93,7 @@ proc textElement*(id: string; text: string; margin = zeroSides(); minSize = size
     textAlign: textAlign,
   )
 
-proc vboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): Element =
+proc vboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; relayLayout = ""): Element =
   Element(
     id: id,
     kind: VBox,
@@ -107,7 +109,7 @@ proc vboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacin
     align: align,
     spacing: spacing,
     padding: padding,
-    relayLayout: "",
+    relayLayout: relayLayout,
     margin: margin,
     minSize: minSize,
     prefSize: prefSize,
@@ -118,7 +120,7 @@ proc vboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacin
     justifySelf: SelfAuto,
   )
 
-proc hboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0): Element =
+proc hboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacing = 0; padding = zeroSides(); margin = zeroSides(); minSize = size(0, 0); prefSize = size(0, 0); maxSize = size(0, 0); expand = false; flex = 0; relayLayout = ""): Element =
   Element(
     id: id,
     kind: HBox,
@@ -134,7 +136,7 @@ proc hboxElement*(id: string; justify = JustifyStart; align = AlignStart; spacin
     align: align,
     spacing: spacing,
     padding: padding,
-    relayLayout: "",
+    relayLayout: relayLayout,
     margin: margin,
     minSize: minSize,
     prefSize: prefSize,
@@ -199,7 +201,7 @@ proc applyPanelStyle*(el: var Element; style: PanelStyle) =
 template vbox*(parentId: string; opts = boxOpts(); body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
-    discard ui.addWidget(vboxElement(parentId, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex), parentResolved)
+    discard ui.addWidget(vboxElement(parentId, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex, opts.relayLayout), parentResolved)
     ui.pushBuildParent(parentId)
     defer:
       ui.popBuildParent()
@@ -209,7 +211,7 @@ template vbox*(parentId: string; opts = boxOpts(); body: untyped) =
 template hbox*(id: string; opts = boxOpts(); body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
-    discard ui.addWidget(hboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex), parentResolved)
+    discard ui.addWidget(hboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex, opts.relayLayout), parentResolved)
     ui.pushBuildParent(id)
     defer:
       ui.popBuildParent()
@@ -227,7 +229,7 @@ template relay*(id: string; schema: string; opts = boxOpts(); body: untyped) =
 template panel*(id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
-    var el = vboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex)
+    var el = vboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex, opts.relayLayout)
     applyPanelStyle(el, style)
     discard ui.addWidget(el, parentResolved)
     ui.pushBuildParent(id)
@@ -238,7 +240,7 @@ template panel*(id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
 template panelRow*(id: string; style: PanelStyle; opts: BoxOpts; body: untyped) =
   block:
     let parentResolved = ui.currentBuildParent()
-    var el = hboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex)
+    var el = hboxElement(id, opts.justify, opts.align, opts.spacing, opts.padding, opts.margin, opts.minSize, opts.prefSize, opts.maxSize, opts.expand, opts.flex, opts.relayLayout)
     applyPanelStyle(el, style)
     discard ui.addWidget(el, parentResolved)
     ui.pushBuildParent(id)

@@ -91,6 +91,25 @@ suite "layout engine":
     let bd = o.r("root.hero.body")
     check bd.y + bd.h <= hero.y + hero.h - 10
 
+  test "vbox layout string places matched cells and flex-flows leftovers":
+    var ui = initUi()
+    layout("root"):
+      vbox("root", boxOpts(relayLayout = "| a, 30px |\n| b, * |")):
+        discard ui.boxNode("root.a", prefSize = size(10, 10))
+        discard ui.boxNode("root.b", prefSize = size(10, 10))
+        # "c" names no cell -> must flex-flow, not vanish.
+        discard ui.boxNode("root.c", prefSize = size(20, 12))
+    let o = layoutInRect(ui, "root", rect(0, 0, 100, 80))
+    check o.ok
+    # Matched children land in their resolved cell rects.
+    let ra = o.r("root.a")
+    check (ra.y, ra.h) == (0, 30)
+    let rb = o.r("root.b")
+    check (rb.y, rb.h) == (30, 50)
+    # Regression: unmatched child is flex-flowed, not dropped at 0x0.
+    let rc = o.r("root.c")
+    check (rc.w, rc.h) == (20, 12)
+
 suite "button label centering":
   proc heroBottoms(cellPx: int): tuple[cellBottom, bodyBottom: int] =
     var ui = initUi()

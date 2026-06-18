@@ -163,76 +163,23 @@ proc positionFromJustify(justify: Justify; containerMain, usedMain, count, spaci
       let each = free div (count + 1)
       (each, spacing + each)
 
+# Layout can be driven two ways, and the two compose. If a container carries a
+# `relayLayout` string, each child whose id (minus the parent prefix) names a
+# cell is placed into that cell's rect; any child that does *not* name a cell
+# falls back to normal flex flow in the container's content rect ("flex-flow the
+# leftovers"). With no string, every child flows. Note: cell rects and the
+# leftover flow share the same content rect, so an author who fills the grid with
+# stretch (`*`) cells leaves no room for flowed children — use named cells for the
+# structured regions and reserve space (or use one mode per container) when mixing.
 proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
                  rects: var Table[string, Rect]; logs: var seq[string];
-                 logEnabled: bool) =
-  let el = ui.elements[id]
-  if not el.visible:
-    return
-  rects[id] = rect
-  logs.logLine(logEnabled, fmt"arrange id={id} kind={el.kind} rect=({rect.x},{rect.y},{rect.w},{rect.h})")
-  if el.kind in {Box, Text, Image}:
-    return
+                 logEnabled: bool)
 
-  let content = innerRect(rect, el.padding)
-  if el.kind == RelayContainer and el.relayLayout.len > 0:
-    var floatingChildren: seq[string] = @[]
-    for childId in ui.childrenById.getOrDefault(id, @[]):
-      let child = ui.elements[childId]
-      if child.visible and child.positionMode == FloatingPosition:
-        floatingChildren.add childId
-
-    try:
-      let parsed = parseLayout(el.relayLayout)
-      let cells = resolve(parsed, content.w, content.h)
-      for childId in ui.childrenById.getOrDefault(id, @[]):
-        let child = ui.elements[childId]
-        if not child.visible or child.positionMode == FloatingPosition:
-          continue
-        var cellName = childId
-        let prefix = id & "."
-        if childId.startsWith(prefix):
-          cellName = childId.substr(prefix.len)
-        if cellName in cells:
-          let c = cells[cellName]
-          let childRect = rect(content.x + c.x, content.y + c.y, c.w, c.h)
-          logs.logLine(logEnabled, fmt"arrange relay child id={childId} cell={cellName} rect=({childRect.x},{childRect.y},{childRect.w},{childRect.h})")
-          arrangeNode(ui, childId, childRect, measured, rects, logs, logEnabled)
-        else:
-          logs.logLine(logEnabled, fmt"arrange relay miss id={childId} cell={cellName}")
-
-      for childId in floatingChildren:
-        let child = ui.elements[childId]
-        let childSize = measured.getOrDefault(childId, size(0, 0))
-        let target =
-          if child.anchorToId.len > 0 and child.anchorToId in rects:
-            rects[child.anchorToId]
-          else:
-            content
-        var x = target.x
-        var y = target.y
-        case child.anchor
-        of AnchorTopLeft:
-          x = target.x
-          y = target.y
-        of AnchorTopRight:
-          x = target.x + target.w - childSize.w
-          y = target.y
-        of AnchorBottomLeft:
-          x = target.x
-          y = target.y + target.h - childSize.h
-        of AnchorBottomRight:
-          x = target.x + target.w - childSize.w
-          y = target.y + target.h - childSize.h
-        of AnchorCenter:
-          x = target.x + (target.w - childSize.w) div 2
-          y = target.y + (target.h - childSize.h) div 2
-        let childRect = rect(x + child.offsetX, y + child.offsetY, childSize.w, childSize.h)
-        arrangeNode(ui, childId, childRect, measured, rects, logs, logEnabled)
-      return
-    except CatchableError:
-      logs.logLine(logEnabled, fmt"relay layout parse failed id={id}; fallback flow")
-
+proc arrangeFlow(ui: UI; el: Element; childIds: seq[string]; content: Rect;
+                 measured: Table[string, Size]; rects: var Table[string, Rect];
+                 logs: var seq[string]; logEnabled: bool) =
+  ## Flex-flow `childIds` along `el`'s axis within `content`. Caller is
+  ## responsible for excluding floating and cell-placed children.
   let axis = axisForKind(el.kind)
 
   type ChildPlacement = object
@@ -242,15 +189,11 @@ proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
     allocatedMain: int
 
   var children: seq[ChildPlacement] = @[]
-  var floatingChildren: seq[string] = @[]
   var baseMainSum = 0
   var flexSum = 0
-  for childId in ui.childrenById.getOrDefault(id, @[]):
+  for childId in childIds:
     let child = ui.elements[childId]
     if not child.visible:
-      continue
-    if child.positionMode == FloatingPosition:
-      floatingChildren.add childId
       continue
     let base = measured[childId]
     let mainMargins = if axis == Horizontal: child.margin.left + child.margin.right else: child.margin.top + child.margin.bottom
@@ -343,12 +286,72 @@ proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
       childRect.x = content.x + crossPos
       childRect.y = content.y + mainPos
 
-    logs.logLine(logEnabled, fmt"arrange child id={c.id} parent={id} rect=({childRect.x},{childRect.y},{childRect.w},{childRect.h})")
+    logs.logLine(logEnabled, fmt"arrange child id={c.id} parent={el.id} rect=({childRect.x},{childRect.y},{childRect.w},{childRect.h})")
     arrangeNode(ui, c.id, childRect, measured, rects, logs, logEnabled)
 
     cursor += outerMain
     if i < children.len - 1:
       cursor += just.gap
+
+proc arrangeNode(ui: UI; id: string; rect: Rect; measured: Table[string, Size];
+                 rects: var Table[string, Rect]; logs: var seq[string];
+                 logEnabled: bool) =
+  let el = ui.elements[id]
+  if not el.visible:
+    return
+  rects[id] = rect
+  logs.logLine(logEnabled, fmt"arrange id={id} kind={el.kind} rect=({rect.x},{rect.y},{rect.w},{rect.h})")
+  if el.kind in {Box, Text, Image}:
+    return
+
+  let content = innerRect(rect, el.padding)
+
+  var floatingChildren: seq[string] = @[]
+  var flowChildren: seq[string] = @[]
+  var relayResolved = false
+
+  if el.relayLayout.len > 0:
+    try:
+      let parsed = parseLayout(el.relayLayout)
+      let cells = resolve(parsed, content.w, content.h)
+      relayResolved = true
+      for childId in ui.childrenById.getOrDefault(id, @[]):
+        let child = ui.elements[childId]
+        if not child.visible:
+          continue
+        if child.positionMode == FloatingPosition:
+          floatingChildren.add childId
+          continue
+        var cellName = childId
+        let prefix = id & "."
+        if childId.startsWith(prefix):
+          cellName = childId.substr(prefix.len)
+        if cellName in cells:
+          let c = cells[cellName]
+          let childRect = rect(content.x + c.x, content.y + c.y, c.w, c.h)
+          logs.logLine(logEnabled, fmt"arrange relay child id={childId} cell={cellName} rect=({childRect.x},{childRect.y},{childRect.w},{childRect.h})")
+          arrangeNode(ui, childId, childRect, measured, rects, logs, logEnabled)
+        else:
+          # No matching cell: flex-flow the leftover instead of dropping it.
+          logs.logLine(logEnabled, fmt"arrange relay miss id={childId} cell={cellName}; flex-flow fallback")
+          flowChildren.add childId
+    except CatchableError:
+      logs.logLine(logEnabled, fmt"relay layout parse failed id={id}; fallback flow")
+      relayResolved = false
+      floatingChildren.setLen(0)
+      flowChildren.setLen(0)
+
+  if not relayResolved:
+    for childId in ui.childrenById.getOrDefault(id, @[]):
+      let child = ui.elements[childId]
+      if not child.visible:
+        continue
+      if child.positionMode == FloatingPosition:
+        floatingChildren.add childId
+      else:
+        flowChildren.add childId
+
+  arrangeFlow(ui, el, flowChildren, content, measured, rects, logs, logEnabled)
 
   for childId in floatingChildren:
     let child = ui.elements[childId]

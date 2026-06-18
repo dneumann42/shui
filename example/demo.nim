@@ -209,7 +209,12 @@ widget App:
             background = state.banner
             on Clicked, ToggleDialog
 
-      card("root.left", FilledPanel, boxOpts(spacing = 10, padding = uniformSides(10), align = AlignStretch)):
+      # The left column drives its children with a layout string instead of
+      # plain flex: the two counters land in named cells `a`/`b`. A child whose
+      # id named no cell would fall back to flex flow rather than vanish (see the
+      # "flex-flows leftovers" test in tests/test_layout.nim).
+      card("root.left", FilledPanel, boxOpts(spacing = 10, padding = uniformSides(10), align = AlignStretch,
+          relayLayout = "| a, * |\n| b, * |")):
         child(left, "root.left.a")
         child(right, "root.left.b"):
           if m.kind == Reset:
